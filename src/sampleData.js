@@ -1,0 +1,36 @@
+// 内置样例数据（与 ObjectAnalyzer samples/test_data.json 同构）
+export const SAMPLE_DATA = [
+  {
+    id: 1,
+    name: '张三',
+    age: 28,
+    gender: 'Male',
+    email: 'zhangsan@example.com',
+    address: { city: '北京', district: '海淀区' },
+    tags: ['C#', 'Developer'],
+    skills: { primary: 'Python' },
+    line: '{"body":"{\\"level\\":\\"info\\",\\"msg\\":\\"login\\"}","status":200}',
+    createdAt: '2024-01-15T08:30:00',
+  },
+  {
+    id: 2,
+    name: '李四',
+    age: 32,
+    gender: 'Female',
+    email: 'lisi@example.com',
+    address: { city: '上海', district: '朝阳区' },
+    tags: ['Java', 'Manager'],
+    line: '{"body":"{\\"level\\":\\"warn\\",\\"msg\\":\\"timeout\\"}","status":500}',
+    createdAt: '2024-03-22T14:05:00',
+  },
+  {
+    id: 3,
+    name: '王五',
+    gender: 'Male',
+    email: 'wangwu@example.com',
+    address: { city: '北京' },
+    tags: ['C#', 'Developer'],
+    line: '{"body":"{\\"level\\":\\"info\\",\\"msg\\":\\"logout\\"}","status":200}',
+    createdAt: '2024-06-10T09:00:00',
+  },
+];

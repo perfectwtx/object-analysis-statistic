@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>对象分析统计 · Object Analyzer</title>
+    <script>
+      // 首屏防闪烁：必须在任何 CSS / 模块 JS 之前同步执行，否则会先按默认（深）色渲染再跳变。
+      // 与 src/theme.js 的逻辑保持一致：存的是模式，这里解析成明暗写到 data-theme。
+      (function () {
+        try {
+          var mode = localStorage.getItem('themeMode');
+          if (mode !== 'light' && mode !== 'dark') mode = 'system';
+          var dark = mode === 'dark'
+            || (mode === 'system' && window.matchMedia
+                && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var theme = dark ? 'dark' : 'light';
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

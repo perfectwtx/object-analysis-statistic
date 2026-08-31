@@ -1,0 +1,636 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { download, toCsv, toHtml, toJson, toJsonSchema, toMarkdown } from './exporters.js';
+import { analyzeFile, fetchRulesReference, getBaseUrl, health, setBaseUrl, validateRules } from './api.js';
+import { adaptAnalysisResponse } from './adapter.js';
+import { formatRulesError, parseJsonc, toBackendRulesText, toJsonText } from './utils.js';
+import { SAMPLE_DATA } from './sampleData.js';
+import OverviewCards from './components/OverviewCards.jsx';
+import CoverageChart from './components/CoverageChart.jsx';
+import TypeChart from './components/TypeChart.jsx';
+import FieldTable from './components/FieldTable.jsx';
+import ValueDistribution from './components/ValueDistribution.jsx';
+import RulesEditor, { RULES_TEMPLATE } from './components/RulesEditor.jsx';
+import QualityPanel from './components/QualityPanel.jsx';
+import InsightsPanel from './components/InsightsPanel.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import ThemeSwitch from './components/ThemeSwitch.jsx';
+
+// 说明：所有统计均由 ObjectAnalyzer.Api（.NET）计算，浏览器端不做任何数据分析。
+
+const TABS = [
+  { key: 'fields', label: '字段明细' },
+  { key: 'insights', label: '深度分析' },
+  { key: 'values', label: '取值分布' },
+  { key: 'quality', label: '质量报告' },
+];
+
+const EXPORT_FORMATS = [
+  { key: 'json', label: 'JSON 报告', ext: 'json', mime: 'application/json', gen: (r) => toJson(r) },
+  { key: 'csv', label: 'CSV 报告', ext: 'csv', mime: 'text/csv', gen: (r) => toCsv(r) },
+  { key: 'md', label: 'Markdown 报告', ext: 'md', mime: 'text/markdown', gen: (r, n) => toMarkdown(r, n) },
+  { key: 'html', label: 'HTML 报告', ext: 'html', mime: 'text/html', gen: (r, n) => toHtml(r, n) },
+  { key: 'xlsx', label: 'Excel 报告', ext: 'xlsx' },
+  { key: 'pdf', label: 'PDF 报告（打印）', ext: 'pdf' },
+  { key: 'schema', label: 'JSON Schema', ext: 'schema.json', mime: 'application/json', gen: (r) => toJsonSchema(r) },
+];
+
+// 「粘贴数据」时指定的文本格式；上传文件由后端按扩展名自动识别
+const TEXT_FORMATS = ['json', 'jsonl', 'csv', 'yaml', 'xml'];
+
+const EMPTY_INSIGHTS = {
+  correlations: { fields: [], pairs: [], strongPairs: [] },
+  patterns: {},
+  hygiene: {},
+  fuzzy: { groups: [], groupCount: 0, similarDuplicates: 0, totalSamples: 0, uniqueCanonical: 0 },
+};
+
+// P4 深度分析开关：交给后端计算，未开启的项前端不再补算
+const FEATURE_DEFS = [
+  { key: 'enableCorrelation', label: '字段相关性' },
+  { key: 'enableStringPatterns', label: '字符串模式' },
+  { key: 'enableUnicodeHygiene', label: 'Unicode 卫生' },
+  { key: 'enableTimeSeries', label: '时间序列' },
+  // 分布快照依赖 CLI 的 --snapshot 输出文件，API 不会在响应里返回，故置灰
+  { key: 'enableDistributionSnapshot', label: '分布快照', cliOnly: true },
+];
+
+const DEFAULT_FEATURES = {
+  enableCorrelation: true,
+  enableStringPatterns: true,
+  enableUnicodeHygiene: true,
+  enableTimeSeries: false,
+  enableDistributionSnapshot: false,
+};
+
+function loadFeatures() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('apiFeatures'));
+    return saved ? { ...DEFAULT_FEATURES, ...saved } : DEFAULT_FEATURES;
+  } catch {
+    return DEFAULT_FEATURES;
+  }
+}
+
+// CSV 数值推断开关（对应后端 ParseOptions.CsvInferNumbers / CLI --no-csv-number-inference）。
+// 默认开：CSV 无类型信息，不推断的话数值列一律是 String，均值/标准差/分位数/相关性全失效。
+// 关掉的场景：某列确实是编码/卡号（"007"、"6217001234567890"），需要按文本统计。
+const CSV_INFER_KEY = 'apiCsvInferNumbers';
+
+function loadCsvInfer() {
+  return localStorage.getItem(CSV_INFER_KEY) !== 'false';
+}
+
+export default function App() {
+  const [source, setSource] = useState(null); // { file, name }
+  const [error, setError] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [rulesText, setRulesText] = useState(RULES_TEMPLATE);
+  const [rules, setRules] = useState(null);
+  const [rulesError, setRulesError] = useState('');
+  // 规则校验结果：{ state: 'checking' | 'ok' | 'error' | 'offline', message?, fields? }
+  const [rulesCheck, setRulesCheck] = useState(null);
+  const [tab, setTab] = useState('fields');
+  const [textFormat, setTextFormat] = useState('json');
+  const fileInput = useRef(null);
+
+  // 分析结果与后端状态
+  const [result, setResult] = useState(null);
+  const [apiState, setApiState] = useState({ status: 'unknown', version: null, error: null });
+  const [busy, setBusy] = useState(false);
+  const [elapsed, setElapsed] = useState(null);
+  const [baseUrlInput, setBaseUrlInput] = useState(() => getBaseUrl());
+  const [features, setFeatures] = useState(loadFeatures);
+  const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
+
+  const toggleFeature = (key) => {
+    setFeatures((f) => {
+      const next = { ...f, [key]: !f[key] };
+      localStorage.setItem('apiFeatures', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const toggleCsvInfer = () => {
+    setCsvInfer((v) => {
+      localStorage.setItem(CSV_INFER_KEY, String(!v));
+      return !v;
+    });
+  };
+
+  // 边栏宽度拖拽（持久化到 localStorage）
+  const [sidebarW, setSidebarW] = useState(() => {
+    const saved = Number(localStorage.getItem('sidebarW'));
+    return saved >= 240 && saved <= 640 ? saved : 330;
+  });
+  const dragState = useRef(null);
+
+  const onResizeStart = (e) => {
+    e.preventDefault();
+    dragState.current = { startX: e.clientX, startW: sidebarW };
+    document.body.classList.add('col-resizing');
+    const onMove = (ev) => {
+      const { startX, startW } = dragState.current;
+      const w = Math.min(640, Math.max(240, startW + ev.clientX - startX));
+      setSidebarW(w);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.classList.remove('col-resizing');
+      setSidebarW((w) => { localStorage.setItem('sidebarW', String(w)); return w; });
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // ---------- 深度分析：全部取自后端响应，缺失即未开启 ----------
+  const deepInsights = useMemo(() => {
+    if (!result) return null;
+    const d = result.deep || {};
+    return {
+      correlations: d.correlations || EMPTY_INSIGHTS.correlations,
+      patterns: d.patterns || EMPTY_INSIGHTS.patterns,
+      hygiene: d.hygiene || EMPTY_INSIGHTS.hygiene,
+      fuzzy: d.fuzzy || EMPTY_INSIGHTS.fuzzy,
+      timeSeries: result.apiExtras?.timeSeriesAnalyses || null,
+    };
+  }, [result]);
+
+  const violationCount = result?.qualityViolations?.length ?? 0;
+
+  // ---------- 后端健康检查 ----------
+  const checkApi = useCallback(async () => {
+    setApiState({ status: 'checking', version: null, error: null });
+    try {
+      const h = await health();
+      setApiState({ status: 'ok', version: h?.version ?? null, error: null });
+    } catch (e) {
+      setApiState({ status: 'error', version: null, error: e.message });
+    }
+  }, []);
+
+  useEffect(() => { checkApi(); }, [checkApi]);
+
+  // ---------- 分析（全部由后端执行） ----------
+  // rulesOverride：applyRules 里刚解析出来的规则还没进 state，需要显式传进来，
+  // 否则「应用规则」第一次点击会因为闭包里的 rules 仍是旧值而漏发规则。
+  const runAnalysis = useCallback(async (src, rulesJson, rulesOverride) => {
+    if (!src?.file) return;
+    const activeRules = rulesOverride !== undefined ? rulesOverride : rules;
+    setBusy(true);
+    setError('');
+    const t0 = performance.now();
+    try {
+      const payload = await analyzeFile(src.file, {
+        // 规则文本可能带注释（JSONC），提交前压成标准 JSON
+        rulesJson: activeRules ? toJsonText(rulesJson) : null,
+        flatten: activeRules?.flatten,
+        fields: activeRules?.selectedFields?.join(','),
+        filter: activeRules?.filter,
+        features,
+        csvInferNumbers: csvInfer,
+      });
+      const adapted = adaptAnalysisResponse(payload);
+      adapted._api.elapsedMs = Math.round(performance.now() - t0);
+      adapted._api.bytes = src.file.size ?? null;
+      setResult(adapted);
+      setElapsed(adapted._api.elapsedMs);
+      setApiState((s) => (s.status === 'ok' ? s : { ...s, status: 'ok', error: null }));
+    } catch (e) {
+      setError(`分析失败：${e.message}`);
+      setResult(null);
+    } finally {
+      setBusy(false);
+    }
+  }, [rules, features, csvInfer]);
+
+  // ---------- 规则校验 ----------
+  // 两段式：先本地查语法（能给出编辑器里的行列），再交后端查结构与类型。
+  // 后端是权威 —— 像 "minValue": "abc" 这种类型写错，本地 JSON.parse 是放行的，
+  // 只有后端的 AnalysisRules 反序列化会拒绝。
+  // 后端还会返回 unknowns：写了但它不认识的键（拼错/已废弃），反序列化时被静默忽略。
+  // 这类问题与类型错误同等对待 —— 一律判失败并阻断分析：留着跑出来的结果看着正常，
+  // 实则那条规则压根没生效，比直接报错更难发现。
+  const checkRules = useCallback(async (text) => {
+    if (!text?.trim()) {
+      setRulesCheck(null);
+      return { ok: true, empty: true };
+    }
+    let parsed;
+    try {
+      parsed = parseJsonc(text);
+    } catch (e) {
+      setRulesCheck({ state: 'error', message: e.message, source: 'local' });
+      return { ok: false, message: e.message };
+    }
+
+    setRulesCheck({ state: 'checking' });
+    const r = await validateRules(toBackendRulesText(text));
+
+    if (r.ok) {
+      setRulesCheck({ state: 'ok', fields: r.fields });
+      return { ok: true, parsed, fields: r.fields, unknowns: r.unknowns };
+    }
+    if (r.offline) {
+      // 后端不可用时降级：语法已确认合法，但没经过结构/类型校验，要明确告知
+      setRulesCheck({ state: 'offline' });
+      return { ok: true, parsed, degraded: true };
+    }
+    // 未知键由后端直接给出中文说明；其余是反序列化错误，需翻译
+    const unknowns = r.unknowns || [];
+    const message = unknowns.length
+      ? r.error || `有 ${unknowns.length} 个规则名不被后端识别`
+      : formatRulesError(r.error);
+    setRulesCheck({
+      state: 'error',
+      message,
+      fields: r.fields,
+      unknowns: unknowns.length ? unknowns : undefined,
+      source: 'backend',
+    });
+    return { ok: false, message };
+  }, []);
+
+  const applyRules = async () => {
+    const check = await checkRules(rulesText);
+    if (!check.ok) {
+      // 具体错误已由校验状态条展示，这里只说明后果
+      setRulesError('规则未通过校验，已取消分析');
+      return;
+    }
+    if (check.empty) {
+      setRules(null);
+      setRulesError('');
+      return;
+    }
+    setRules(check.parsed);
+    setRulesError('');
+    if (source) await runAnalysis(source, rulesText, check.parsed);
+  };
+
+  const clearRules = () => {
+    setRules(null);
+    setRulesError('');
+    setRulesCheck(null);
+    if (source) runAnalysis(source, null);
+  };
+
+  // ---------- 数据源载入 ----------
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const src = { file, name: file.name };
+    setSource(src);
+    setFileName(file.name);
+    setError('');
+    await runAnalysis(src, rulesText);
+  };
+
+  const onPaste = async () => {
+    const text = window.prompt('粘贴数据内容（JSON / JSONL / CSV / YAML / XML）：');
+    if (!text) return;
+    const name = `粘贴的数据（${textFormat}）`;
+    setFileName(name);
+    setError('');
+    // 包装成文件提交，后缀决定后端的解析格式
+    const file = new File([text], `pasted.${textFormat}`, { type: 'text/plain' });
+    const src = { file, name };
+    setSource(src);
+    await runAnalysis(src, rulesText);
+  };
+
+  const loadSample = async () => {
+    setFileName('内置样例数据');
+    setError('');
+    const file = new File([JSON.stringify(SAMPLE_DATA)], 'sample.json', { type: 'application/json' });
+    const src = { file, name: '内置样例数据' };
+    setSource(src);
+    await runAnalysis(src, rulesText);
+  };
+
+  const fetchReference = async () => {
+    try {
+      const ref = await fetchRulesReference();
+      const text = typeof ref === 'string' ? ref : JSON.stringify(ref, null, 2);
+      setRulesText(text);
+      setRulesError('');
+      // 模板本身是 JSONC，顺手验一遍，确认能直接提交给后端
+      await checkRules(text);
+    } catch (e) {
+      setRulesError(`拉取参考模板失败：${e.message}`);
+    }
+  };
+
+  // ---------- 导出 ----------
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportReport = async (fmt) => {
+    setExportOpen(false);
+    if (fmt.key === 'xlsx') {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+      const fieldRows = result.fieldStatistics.map((f) => ({
+        字段名: f.fieldName,
+        覆盖率: +(f.coverage * 100).toFixed(1),
+        主导类型: f.primaryType,
+        类型分布: Object.entries(f.typeCounts).map(([t, c]) => `${t}:${c}`).join(' '),
+        唯一值: f.distinctCount,
+        出现次数: f.count,
+        默认值: f.defaultValue ?? '',
+        语义类型: f.semanticType ?? '',
+        P50: f.median ?? '', P90: f.p90 ?? '', P95: f.p95 ?? '', P99: f.p99 ?? '',
+        异常值: f.outlierCount ?? '',
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(fieldRows), '字段统计');
+      if (result.qualityViolations?.length) {
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.json_to_sheet(result.qualityViolations.map((v) => ({
+            字段: v.field || '（数据集）', 检查项: v.check, 违规数: v.count, 说明: v.message,
+          }))),
+          '质量违规'
+        );
+      }
+      XLSX.writeFile(wb, 'report.xlsx');
+      return;
+    }
+    if (fmt.key === 'pdf') {
+      const w = window.open('', '_blank');
+      if (!w) { setError('浏览器拦截了弹出窗口，请允许弹出后重试'); return; }
+      w.document.write(toHtml(result, fileName) + '<script>window.onload=function(){window.print()}<\/script>');
+      w.document.close();
+      return;
+    }
+    download(fmt.gen(result, fileName), `report.${fmt.ext}`, fmt.mime);
+  };
+
+  const apiReady = apiState.status === 'ok';
+  const kb = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`);
+
+  return (
+    <div className="workbench">
+      {/* ---------- 左侧边栏 ---------- */}
+      <aside className="sidebar" style={{ width: sidebarW }}>
+        <div className="brand">
+          <div className="logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ stroke: 'var(--on-gradient)' }} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18" /><path d="M7 15l4-6 4 3 5-8" />
+            </svg>
+          </div>
+          <div>
+            <div className="brand-name">对象分析统计</div>
+            <div className="brand-sub">Object Analyzer</div>
+          </div>
+        </div>
+
+        {/* ---------- 后端状态 ---------- */}
+        <div className="side-section">
+          <div className="side-title">分析后端</div>
+          <div className={`api-status ${apiState.status}`}>
+            <span className="api-dot" />
+            {apiState.status === 'checking' && <span>正在连接后端…</span>}
+            {apiState.status === 'ok' && (
+              <span>后端就绪{apiState.version ? ` · v${apiState.version}` : ''}</span>
+            )}
+            {apiState.status === 'error' && (
+              <span className="api-err">
+                {apiState.error}
+                <button type="button" className="btn-link" onClick={checkApi}>重试</button>
+              </span>
+            )}
+              <details className="api-features">
+                <summary>深度分析（P4）</summary>
+                <div className="feature-list">
+                  {FEATURE_DEFS.map((fd) => (
+                    <label
+                      key={fd.key}
+                      className={`feature-item ${fd.cliOnly ? 'disabled' : ''}`}
+                      title={fd.cliOnly ? 'API 不在响应中返回分布快照（需 CLI 的 --snapshot 导出文件），此项对接口无效' : ''}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!features[fd.key]}
+                        disabled={fd.cliOnly}
+                        onChange={() => toggleFeature(fd.key)}
+                      />
+                      {fd.label}
+                      {fd.cliOnly && <span className="cli-tag">仅 CLI</span>}
+                    </label>
+                  ))}
+                </div>
+                <div className="api-hint">
+                  未开启的项不会返回数据，前端不再本地补算。改动后需重新分析。
+                </div>
+              </details>
+
+              <details className="api-base">
+                <summary>后端地址</summary>
+                <input
+                  className="base-input mono"
+                  value={baseUrlInput}
+                  onChange={(e) => setBaseUrlInput(e.target.value)}
+                  onBlur={() => { setBaseUrl(baseUrlInput); checkApi(); }}
+                  spellCheck={false}
+                />
+                <div className="api-hint">
+                  默认 /api 走 Vite 代理（→ http://localhost:5200）。直连请填完整地址，如 http://localhost:5200/api
+                </div>
+              </details>
+          </div>
+        </div>
+
+        {/* ---------- 数据源 ---------- */}
+        <div className="side-section">
+          <div className="side-title">数据源</div>
+          <div className="source-current" title={fileName}>
+            <span className="source-dot" />
+            <span className="mono source-name">{fileName || '未选择'}</span>
+          </div>
+          {error && <div className="error side-error">{error}</div>}
+          <div className="side-actions">
+            <button className="btn primary block" onClick={() => fileInput.current?.click()} disabled={busy}>
+              {busy ? '分析中…' : '上传文件'}
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".json,.jsonl,.txt,.csv,.xml,.yaml,.yml,.xlsx,.xls,.gz,.zip"
+              hidden
+              onChange={onFile}
+            />
+            <div className="btn-row">
+              <button className="btn half" onClick={onPaste} disabled={busy}>粘贴数据</button>
+              <button className="btn half" onClick={loadSample} disabled={busy}>加载样例</button>
+            </div>
+            <button
+              className="btn block"
+              onClick={() => source && runAnalysis(source, rulesText)}
+              disabled={busy || !source}
+              title="按当前开关与规则重新提交分析"
+            >
+              重新分析
+            </button>
+            <div className="format-row">
+              <label htmlFor="text-format">文本格式</label>
+              <select
+                id="text-format"
+                className="format-select"
+                value={textFormat}
+                onChange={(e) => setTextFormat(e.target.value)}
+                title="「粘贴数据」时使用；上传文件由后端按扩展名自动识别"
+              >
+                {TEXT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            {/* CSV 无类型信息，只能靠猜；默认开，关掉则整列按文本统计 */}
+            <label
+              className="feature-item csv-infer"
+              title="CSV 无类型信息，MiniExcel 取出的单元格一律是字符串，默认把「看起来是数字」的还原成 long/double。保守规则：前导零（007）、超过 15 位、科学计数法、千分位、带单位的一律保持字符串。仅作用于 CSV —— xlsx 单元格自带类型，JSON 的数字本来就是数字。"
+            >
+              <input type="checkbox" checked={csvInfer} onChange={toggleCsvInfer} />
+              CSV 数字列推断为数值
+            </label>
+            {!csvInfer && (
+              <div className="api-hint">
+                已关闭：CSV 数值列按文本统计，均值 / 标准差 / 分位数 / 直方图和相关性都会拿不到。
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ---------- 规则配置 ---------- */}
+        <div className="side-section grow">
+          <div className="side-title">
+            规则配置
+            {rules && <span className="badge semantic rules-on">已生效</span>}
+          </div>
+          <RulesEditor
+            text={rulesText}
+            setText={setRulesText}
+            error={rulesError}
+            check={rulesCheck}
+            onValidate={(t) => checkRules(t ?? rulesText)}
+            onApply={applyRules}
+            onClear={clearRules}
+            onFetchReference={fetchReference}
+            applied={!!rules}
+            busy={busy}
+          />
+        </div>
+
+        {/* ---------- 导出 ---------- */}
+        <div className="side-footer">
+          <div className="export-wrap">
+            <button className="btn block" onClick={() => setExportOpen(!exportOpen)} disabled={!result}>
+              导出报告 / Schema ▾
+            </button>
+            {exportOpen && result && (
+              <>
+                <div className="export-mask" onClick={() => setExportOpen(false)} />
+                <div className="export-menu">
+                  {EXPORT_FORMATS.map((f) => (
+                    <button key={f.key} className="export-item" onClick={() => exportReport(f)}>
+                      {f.label}
+                      <span className="export-ext">.{f.ext}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* ---------- 拖拽手柄 ---------- */}
+      <div className="resize-handle" onMouseDown={onResizeStart} title="拖拽调整边栏宽度" />
+
+      {/* ---------- 主内容区 ---------- */}
+      <main className="main">
+        <div className="topbar">
+          <div>
+            <h1>分析概览</h1>
+            <p className="subtitle">由 ObjectAnalyzer.Api（.NET）执行分析</p>
+          </div>
+          <div className="topbar-status">
+            {busy && (
+              <span className="busy-indicator"><span className="spinner" />分析中…</span>
+            )}
+            {!busy && elapsed != null && (
+              <span className="chip api-chip" title="本次分析从提交到拿到结果的端到端耗时">
+                耗时 {(elapsed / 1000).toFixed(2)}s
+                {result?._api?.bytes != null ? ` · ${kb(result._api.bytes)}` : ''}
+              </span>
+            )}
+            {!busy && apiReady && result?._api?.format && (
+              <span className="chip api-chip">
+                {result._api.format}
+                {result._api.rulesSource ? ` · 规则(${result._api.rulesSource})` : ''}
+              </span>
+            )}
+            {rules && (
+              <span className={`quality-status ${violationCount === 0 ? 'pass' : 'fail'}`}>
+                {violationCount === 0 ? '✓ 质量校验 PASS' : `✗ ${violationCount} 项违规`}
+              </span>
+            )}
+          </div>
+          <ThemeSwitch />
+        </div>
+
+        {result && (
+          <>
+            <OverviewCards result={result} />
+            <div className="charts">
+              <CoverageChart fields={result.fieldStatistics} />
+              <TypeChart fields={result.fieldStatistics} />
+            </div>
+
+            <div className="panel tabs-panel">
+              <div className="tabs">
+                {TABS.map((t) => (
+                  <button
+                    key={t.key}
+                    className={`tab ${tab === t.key ? 'active' : ''}`}
+                    onClick={() => setTab(t.key)}
+                  >
+                    {t.label}
+                    {t.key === 'quality' && rules && violationCount > 0 && (
+                      <span className="tab-badge">{violationCount}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="tab-content">
+                {/* 单个标签页渲染出错时只影响该标签页；key 保证切换标签会重置错误状态 */}
+                <ErrorBoundary key={tab}>
+                  {tab === 'fields' && <FieldTable fields={result.fieldStatistics} rules={rules} bare />}
+                  {tab === 'insights' && deepInsights && (
+                    <InsightsPanel
+                      result={result}
+                      insights={deepInsights}
+                      features={features}
+                      fileName={fileName}
+                    />
+                  )}
+                  {tab === 'values' && <ValueDistribution fields={result.fieldStatistics} bare />}
+                  {tab === 'quality' && (
+                    rules
+                      ? <QualityPanel violations={result.qualityViolations || []} bare />
+                      : <div className="empty-tab">尚未应用规则。在左侧边栏配置规则后，这里会显示质量校验报告。</div>
+                  )}
+                </ErrorBoundary>
+              </div>
+            </div>
+          </>
+        )}
+
+        {!result && !busy && (
+          <div className="empty-tab">
+            {apiState.status === 'error'
+              ? '后端未连接。请启动 ObjectAnalyzer.Api 后点击重试。'
+              : '选择数据源后由后端执行分析（上传文件 / 粘贴数据 / 加载样例）。'}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}

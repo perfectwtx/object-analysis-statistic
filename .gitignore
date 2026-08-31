@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+
+# 缓存与日志
+.npm-cache/
+npm-install.log
+
+# 本地工具状态（AI 工作记忆等，非源码）
+.workbuddy/
+
+# 编辑器 / 系统
+.DS_Store
+*.local
