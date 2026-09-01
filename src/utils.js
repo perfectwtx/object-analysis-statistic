@@ -13,6 +13,7 @@ export const CHECK_LABELS = {
   nullRate: 'Null 率超标',
   rowCount: '行数不足',
   duplicateRate: '重复率超标',
+  outlierRatio: '异常值占比超标',
 };
 
 // ---------- JSONC 解析（规则配置支持注释） ----------

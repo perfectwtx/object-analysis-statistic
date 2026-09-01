@@ -2,8 +2,10 @@ import { useRef, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 
 export const RULES_TEMPLATE = `{
-  // 顶层开关：true 时把嵌套对象摊平成 a.b.c 后再统计
-  "flatten": true,
+  // 全局运行配置放在 runtime 下（旧版的顶层 flatten 已迁入 runtime.flatten）
+  "runtime": {
+    "flatten": true
+  },
 
   "fields": {
     "gender": { "enumValues": ["Male", "Female", "Unknown"] },
@@ -162,7 +164,7 @@ export default function RulesEditor({
       <details className="rules-help">
         <summary>支持的规则字段</summary>
         <ul>
-          <li><code>flatten</code> 顶层开关：是否扁平化嵌套对象</li>
+          <li><code>runtime.flatten</code>：是否扁平化嵌套对象（旧版为顶层 flatten，现已迁入 runtime）</li>
           <li><code>transform.parse</code> 值转换：json / jwt / base64 / url，解析后展开统计（支持多级）</li>
           <li><code>valueParsers</code> 字段级解析器：source / parseType / flatten / header</li>
           <li><code>enumValues</code> 枚举白名单</li>
@@ -175,8 +177,8 @@ export default function RulesEditor({
           <li><code>defaultValue</code> 指定默认值</li>
           <li><code>primaryType</code> 期望主导类型</li>
           <li><code>pii / redact</code> 敏感字段打码</li>
-          <li><code>selectedFields</code> 仅统计指定字段</li>
-          <li><code>filter</code> 全局过滤表达式</li>
+          <li><code>runtime.selectedFields</code>：仅统计指定字段</li>
+          <li><code>runtime.filter</code>：全局过滤表达式</li>
           <li><code>expectations</code> minRowCount / maxDuplicateRate</li>
         </ul>
         <div className="rules-help-note">

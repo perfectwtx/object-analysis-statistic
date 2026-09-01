@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { download, toCsv, toHtml, toJson, toJsonSchema, toMarkdown } from './exporters.js';
 import { analyzeFile, fetchRulesReference, getBaseUrl, health, setBaseUrl, validateRules } from './api.js';
 import { adaptAnalysisResponse } from './adapter.js';
-import { formatRulesError, parseJsonc, toBackendRulesText, toJsonText } from './utils.js';
+import { formatRulesError, parseJsonc, toBackendRulesText } from './utils.js';
 import { SAMPLE_DATA } from './sampleData.js';
 import OverviewCards from './components/OverviewCards.jsx';
 import CoverageChart from './components/CoverageChart.jsx';
@@ -181,12 +181,19 @@ export default function App() {
     setError('');
     const t0 = performance.now();
     try {
+      // 新后端把 flatten/selectedFields/filter 从规则顶层迁到了 runtime.*，
+      // 旧式顶层写法会被判为未知键（valid:false）阻断分析。这里剥离后改走请求选项，
+      // 同时兼容用户在规则里直接写 runtime.* 的新式写法。
+      const { flatten, selectedFields, filter, ...ruleBody } = activeRules || {};
       const payload = await analyzeFile(src.file, {
-        // 规则文本可能带注释（JSONC），提交前压成标准 JSON
-        rulesJson: activeRules ? toJsonText(rulesJson) : null,
-        flatten: activeRules?.flatten,
-        fields: activeRules?.selectedFields?.join(','),
-        filter: activeRules?.filter,
+        // ruleBody 已是解析后的纯对象（注释/尾随逗号在 checkRules 阶段已清掉），
+        // 直接 JSON.stringify 即可；绝不能传 toJsonText(object) —— 它会把对象当成 JSONC
+        // 文本去 JSON.parse，失败回退后 FormData 把对象压成 "[object Object]"，
+        // 后端反序列化直接报「could not be converted to AnalysisRules」。
+        rulesJson: activeRules ? JSON.stringify(ruleBody) : null,
+        flatten,
+        fields: selectedFields?.join(','),
+        filter,
         features,
         csvInferNumbers: csvInfer,
       });
