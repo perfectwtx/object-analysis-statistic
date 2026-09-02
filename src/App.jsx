@@ -72,15 +72,6 @@ function loadFeatures() {
   }
 }
 
-// CSV 数值推断开关（对应后端 ParseOptions.CsvInferNumbers / CLI --no-csv-number-inference）。
-// 默认开：CSV 无类型信息，不推断的话数值列一律是 String，均值/标准差/分位数/相关性全失效。
-// 关掉的场景：某列确实是编码/卡号（"007"、"6217001234567890"），需要按文本统计。
-const CSV_INFER_KEY = 'apiCsvInferNumbers';
-
-function loadCsvInfer() {
-  return localStorage.getItem(CSV_INFER_KEY) !== 'false';
-}
-
 export default function App() {
   const [source, setSource] = useState(null); // { file, name }
   const [error, setError] = useState('');
@@ -111,20 +102,12 @@ export default function App() {
   const [pendingRun, setPendingRun] = useState(null); // { src, opts }
   const [baseUrlInput, setBaseUrlInput] = useState(() => getBaseUrl());
   const [features, setFeatures] = useState(loadFeatures);
-  const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
 
   const toggleFeature = (key) => {
     setFeatures((f) => {
       const next = { ...f, [key]: !f[key] };
       localStorage.setItem('apiFeatures', JSON.stringify(next));
       return next;
-    });
-  };
-
-  const toggleCsvInfer = () => {
-    setCsvInfer((v) => {
-      localStorage.setItem(CSV_INFER_KEY, String(!v));
-      return !v;
     });
   };
 
@@ -251,7 +234,6 @@ export default function App() {
       fields: selectedFields?.join(','),
       filter,
       features,
-      csvInferNumbers: csvInfer,
     };
 
     // 方案 B：只要应用了规则（rulesJson 非空）就先预检。
@@ -260,7 +242,7 @@ export default function App() {
     // 不会误报，所以放宽到"有规则即预检"是安全的。
     if (rulesJson) {
       try {
-        const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer });
+        const pf = await preflight(src.file, { rulesJson, flatten });
         if (pf?.hasWarning) {
           setPreflightModal({
             ruleFields: pf.ruleFields ?? [],
@@ -276,7 +258,7 @@ export default function App() {
     }
 
     await executeAnalysis(src, opts);
-  }, [rules, features, csvInfer, executeAnalysis]);
+  }, [rules, features, executeAnalysis]);
 
   // 预检弹框：确认继续 → 消费挂起参数立即分析；取消 → 仅关闭，引导去侧栏换规则
   const confirmPreflight = () => {
@@ -591,19 +573,6 @@ export default function App() {
                 {TEXT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
               </select>
             </div>
-            {/* CSV 无类型信息，只能靠猜；默认开，关掉则整列按文本统计 */}
-            <label
-              className="feature-item csv-infer"
-              title="CSV 无类型信息，MiniExcel 取出的单元格一律是字符串，默认把「看起来是数字」的还原成 long/double。保守规则：前导零（007）、超过 15 位、科学计数法、千分位、带单位的一律保持字符串。仅作用于 CSV —— xlsx 单元格自带类型，JSON 的数字本来就是数字。"
-            >
-              <input type="checkbox" checked={csvInfer} onChange={toggleCsvInfer} />
-              CSV 数字列推断为数值
-            </label>
-            {!csvInfer && (
-              <div className="api-hint">
-                已关闭：CSV 数值列按文本统计，均值 / 标准差 / 分位数 / 直方图和相关性都会拿不到。
-              </div>
-            )}
           </div>
         </div>
 

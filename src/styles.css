@@ -888,9 +888,6 @@ body.col-resizing * { cursor: col-resize !important; }
 }
 .format-select:focus { border-color: var(--accent); }
 
-/* ---------- CSV 数值推断开关 ---------- */
-.csv-infer { margin-top: 10px; }
-
 /* ---------- 分析中指示 ---------- */
 .busy-indicator {
   display: inline-flex; align-items: center; gap: 7px;
