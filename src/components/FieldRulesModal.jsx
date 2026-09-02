@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  CRYPTO_TRANSFORM_TYPES, PARSE_TYPES, PII_MASK_OPTIONS, REDACT_OPTIONS,
-  TRANSFORM_TYPES, draftToValueParser, getFieldsMap, mergeDraftsIntoRulesText,
-  parseRulesText, ruleToDraft, suggestDefaults, valueParserToDraft,
+  CRYPTO_TRANSFORM_TYPES, EXPECTATIONS_FIELDS, PARSE_TYPES, PII_MASK_OPTIONS, RUNTIME_GROUPS,
+  REDACT_OPTIONS, TRANSFORM_TYPES, draftToValueParser, getFieldsMap, initGlobal,
+  mergeDraftsIntoRulesText, mergeFieldList, parseRulesText, ruleToDraft, serializeGlobal,
+  suggestDefaults, valueParserToDraft,
 } from '../rulesModel.js';
 
 const VP_KEY = '__valueParsers__';
+const GLOBAL_KEY = '__global__';
 
 /**
  * 字段级规则可视化配置弹窗。
@@ -17,6 +19,9 @@ const VP_KEY = '__valueParsers__';
  * 另外，当输入来源是 Excel / CSV 时，左侧列表顶部会出现一个全局「值解析 ValueParsers」入口，
  * 用于配置单元格内嵌 JSON 的值级解析（对应后端顶层 valueParsers）。
  *
+ * 左侧字段列表 = 数据字段 ∪ 规则文本里已配置的字段（见 mergeFieldList）：
+ * 规则框里手写但数据里不存在的字段也会列出（标「仅规则」），保证"规则框里有的配置，弹窗里一定看得到"。
+ *
  * @param {boolean} open
  * @param {'preflight'|'analysis'} source 数据来源（仅影响副标题文案）
  * @param {string} inputFormat 输入格式（如 'excel' / 'csv' / 'json'）。excel/csv 时显示 ValueParsers
@@ -27,6 +32,8 @@ const VP_KEY = '__valueParsers__';
  */
 export default function FieldRulesModal({ open, source, inputFormat, fields, rulesText, onApply, onClose }) {
   const [drafts, setDrafts] = useState({});
+  // 左侧列表实际展示的字段：数据字段 + 规则里独有的字段（打开时合并一次）
+  const [fieldList, setFieldList] = useState([]);
   const [touched, setTouched] = useState(() => new Set());
   const [removed, setRemoved] = useState(() => new Set());
   const [selected, setSelected] = useState(null);
@@ -38,10 +45,15 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
   const [vpDrafts, setVpDrafts] = useState([]);
   const [vpDirty, setVpDirty] = useState(false);
 
+  // 全局配置（runtime + expectations）草稿与脏标记
+  const [runtimeDraft, setRuntimeDraft] = useState({});
+  const [expectationsDraft, setExpectationsDraft] = useState({ minRowCount: '', maxDuplicateRate: '' });
+  const [globalDirty, setGlobalDirty] = useState(false);
+
   // Excel / CSV 输入（或其规则已含 valueParsers）才显示 ValueParsers 入口
   const isExcelCsv = !!inputFormat && (inputFormat === 'csv' || inputFormat.startsWith('excel'));
 
-  // 打开时解析现有规则，为每个字段派生初始草稿，并载入已有 valueParsers
+  // 打开时解析现有规则，为每个字段派生初始草稿，并载入已有 valueParsers / runtime / expectations
   useEffect(() => {
     if (!open) return;
     let rulesObj = {};
@@ -52,8 +64,11 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
     }
     const baseFields = getFieldsMap(rulesObj);
     baseRef.current = { fields: baseFields };
+    // 数据字段 ∪ 规则里已配置的字段 —— 后者哪怕数据里没有也要能编辑/清除
+    const merged = mergeFieldList(fields, baseFields);
+    setFieldList(merged);
     const init = {};
-    for (const f of fields) init[f.name] = ruleToDraft(baseFields[f.name]);
+    for (const f of merged) init[f.name] = ruleToDraft(baseFields[f.name]);
     setDrafts(init);
     setTouched(new Set());
     setRemoved(new Set());
@@ -62,9 +77,13 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
       : [];
     setVpDrafts(vp);
     setVpDirty(false);
+    const g = initGlobal(rulesObj);
+    setRuntimeDraft(g.runtimeDraft);
+    setExpectationsDraft(g.expectationsDraft);
+    setGlobalDirty(false);
     setSearch('');
     setConfirmError('');
-    setSelected(fields[0]?.name ?? (isExcelCsv || vp.length ? VP_KEY : null));
+    setSelected(merged[0]?.name ?? (isExcelCsv || vp.length ? VP_KEY : GLOBAL_KEY));
   }, [open, rulesText, fields, isExcelCsv]);
 
   // 是否展示 ValueParsers：excel/csv 输入，或规则里已经有 valueParsers
@@ -72,9 +91,13 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return fields;
-    return fields.filter((f) => f.name.toLowerCase().includes(q));
-  }, [fields, search]);
+    if (!q) return fieldList;
+    return fieldList.filter((f) => f.name.toLowerCase().includes(q));
+  }, [fieldList, search]);
+
+  // 副标题用：数据字段数 / 仅存在于规则里的字段数
+  const dataCount = useMemo(() => fieldList.filter((f) => !f.fromRules).length, [fieldList]);
+  const rulesOnlyCount = fieldList.length - dataCount;
 
   if (!open) return null;
 
@@ -103,6 +126,23 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
     setVpDirty(true);
   };
 
+  // 全局配置：runtime 子组 / expectations 编辑
+  const updateRuntime = (section, k, val) => {
+    setRuntimeDraft((d) => {
+      if (section === 'top') return { ...d, [k]: val };
+      const sub = (d[section] && typeof d[section] === 'object') ? { ...d[section] } : {};
+      sub[k] = val;
+      return { ...d, [section]: sub };
+    });
+    setGlobalDirty(true);
+  };
+  const updateExpectation = (k, val) => {
+    setExpectationsDraft((d) => ({ ...d, [k]: val }));
+    setGlobalDirty(true);
+  };
+  const getRuntimeVal = (section, k) =>
+    section === 'top' ? runtimeDraft[k] : (runtimeDraft[section]?.[k]);
+
   const onConfirm = async () => {
     setConfirmError('');
     // source 为 ValueParsers 的必填项：空 source 后端会静默跳过该解析器，
@@ -123,11 +163,15 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
           .map(draftToValueParser);
         vpOverride = { valueParsers: list };
       }
-      if (entries.length === 0 && !vpDirty) {
+      let globalOverride;
+      if (globalDirty) {
+        globalOverride = serializeGlobal(runtimeDraft, expectationsDraft);
+      }
+      if (entries.length === 0 && !vpDirty && !globalDirty) {
         onClose();
         return;
       }
-      const newText = mergeDraftsIntoRulesText(rulesText, entries, vpOverride);
+      const newText = mergeDraftsIntoRulesText(rulesText, entries, vpOverride, globalOverride);
       const ok = await onApply(newText);
       if (ok) onClose();
       else setConfirmError('规则校验未通过，请检查后重试（详见规则框下方的错误提示）');
@@ -138,7 +182,8 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
 
   const sel = selected;
   const draft = sel ? drafts[sel] : null;
-  const selStat = fields.find((f) => f.name === sel)?.stat;
+  const selEntry = fieldList.find((f) => f.name === sel);
+  const selStat = selEntry?.stat;
   const suggest = selStat ? suggestDefaults(selStat) : null;
   const isRemoved = sel ? removed.has(sel) : false;
 
@@ -188,10 +233,13 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
       <div className="fieldrules-modal">
         <header className="fieldrules-head">
           <div>
-            <h3 id="fr-title">字段规则配置</h3>
+            <h3 id="fr-title">规则配置</h3>
             <p className="fieldrules-sub">
-              {source === 'preflight' ? '基于预检样本字段' : '基于分析结果字段'}
-              {' · '}逐字段设置类型 / 转换 / 质量检查 / PII，确认后写回规则输入框
+              {dataCount > 0
+                ? (source === 'preflight' ? `基于预检样本字段（${dataCount}）` : `基于分析结果字段（${dataCount}）`)
+                : '当前无数据字段（未分析）'}
+              {rulesOnlyCount > 0 && ` · ${rulesOnlyCount} 个字段仅存在于规则中`}
+              {' · '}全局配置 / 值解析 / 逐字段类型·转换·质量检查·PII，确认后写回规则输入框
             </p>
           </div>
           <button className="btn link" onClick={onClose}>关闭</button>
@@ -207,6 +255,14 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
               onChange={(e) => setSearch(e.target.value)}
             />
             <div className="fr-list">
+              <button
+                key={GLOBAL_KEY}
+                className={`fr-item vp-item ${sel === GLOBAL_KEY ? 'active' : ''}`}
+                onClick={() => setSelected(GLOBAL_KEY)}
+                title="解析行为 / 字段选择 / 采样 / 门禁 / 深度分析 / 数据集期望等全局配置"
+              >
+                <span className="fr-name">⚙️ 全局配置<small className="vp-sub">（runtime / expectations）</small></span>
+              </button>
               {showValueParsers && (
                 <button
                   key={VP_KEY}
@@ -218,20 +274,32 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                   <span className="fr-badge">{vpDrafts.length || 0}</span>
                 </button>
               )}
-              {filtered.length === 0 && <div className="fr-empty">无匹配字段</div>}
+              {filtered.length === 0 && (
+                <div className="fr-empty">
+                  {fieldList.length === 0
+                    ? '暂无字段。先分析数据，或在规则框里配置字段后再打开。'
+                    : '无匹配字段'}
+                </div>
+              )}
               {filtered.map((f) => {
-                const badge = f.stat?.primaryType && f.stat.primaryType !== 'Unknown'
-                  ? f.stat.primaryType
-                  : (f.stat?.semanticType ?? '—');
+                const badge = f.fromRules
+                  ? '仅规则'
+                  : (f.stat?.primaryType && f.stat.primaryType !== 'Unknown'
+                    ? f.stat.primaryType
+                    : (f.stat?.semanticType ?? '—'));
                 const edited = touched.has(f.name);
                 return (
                   <button
                     key={f.name}
                     className={`fr-item ${sel === f.name ? 'active' : ''}`}
                     onClick={() => setSelected(f.name)}
+                    title={f.fromRules
+                      ? `${f.name}（规则里已配置，但当前数据中不存在该字段）`
+                      : (f.inRules ? `${f.name}（规则里已有配置）` : f.name)}
                   >
-                    <span className="fr-name" title={f.name}>{f.name}</span>
-                    <span className="fr-badge">{badge}</span>
+                    {f.inRules && <span className="fr-cfg" title="规则里已有配置">✓</span>}
+                    <span className="fr-name">{f.name}</span>
+                    <span className={`fr-badge${f.fromRules ? ' rules-only' : ''}`}>{badge}</span>
                     {edited && <span className="fr-dot" title="已修改">●</span>}
                   </button>
                 );
@@ -306,10 +374,99 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                 </div>
               </div>
             )}
+            {sel === GLOBAL_KEY && (
+              <div className="fr-form-inner">
+                <div className="fr-form-title">
+                  <code>全局配置 runtime / expectations</code>
+                  <span className="fr-meta">解析行为 · 字段选择 · 采样 · 门禁 · 深度分析 · 数据集期望</span>
+                </div>
+                <p className="fr-vp-hint">
+                  这里覆盖原先只能手写进 JSON 文本框的全部规则配置。未改动的项目保持原样，确认后整体写回规则输入框。
+                </p>
+
+                {/* 数据集期望 */}
+                <div className="fr-group">
+                  <div className="fr-group-title">数据集期望 Expectations</div>
+                  <div className="fr-grid">
+                    {EXPECTATIONS_FIELDS.map((f) => (
+                      <label className="fr-field" key={f.k}>
+                        <span className="fr-label">{f.label}</span>
+                        <input
+                          className="fr-input"
+                          type="number"
+                          value={expectationsDraft[f.k] ?? ''}
+                          onChange={(e) => updateExpectation(f.k, e.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* runtime 各子组 */}
+                {RUNTIME_GROUPS.map((grp) => {
+                  const body = grp.fields.map((f) => {
+                    const raw = grp.section === 'top' ? runtimeDraft[f.k] : runtimeDraft[grp.section]?.[f.k];
+                    if (f.type === 'tribool') {
+                      const str = raw === true ? 'true' : raw === false ? 'false' : '';
+                      return (
+                        <label className="fr-field" key={f.k} title={f.help}>
+                          <span className="fr-label">{f.label}</span>
+                          <select
+                            className="fr-input"
+                            value={str}
+                            onChange={(e) => updateRuntime(grp.section, f.k, e.target.value === '' ? '' : e.target.value === 'true')}
+                          >
+                            <option value="">（未设置）</option>
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                          </select>
+                        </label>
+                      );
+                    }
+                    return (
+                      <label className="fr-field" key={f.k} title={f.help}>
+                        <span className="fr-label">{f.label}</span>
+                        <input
+                          className="fr-input"
+                          type={f.type === 'number' ? 'number' : 'text'}
+                          value={raw ?? ''}
+                          placeholder={f.help ? f.help.replace(/（.*?）/g, '').slice(0, 40) : ''}
+                          onChange={(e) => updateRuntime(grp.section, f.k, e.target.value)}
+                        />
+                      </label>
+                    );
+                  });
+                  const cls = `fr-group${grp.cliOnly ? ' fr-group-cli' : ''}`;
+                  const titleNode = (
+                    <div className="fr-group-title">
+                      {grp.title}
+                      {grp.cliOnly && <span className="fr-cli-tag">仅命令行</span>}
+                    </div>
+                  );
+                  if (grp.cliOnly) {
+                    return (
+                      <details className="fr-group-details" key={grp.section}>
+                        <summary>{titleNode}</summary>
+                        <div className="fr-grid">{body}</div>
+                      </details>
+                    );
+                  }
+                  return (
+                    <div className={cls} key={grp.section}>
+                      {titleNode}
+                      <div className="fr-grid">{body}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {sel && !isRemoved && draft && (
               <div className="fr-form-inner">
                 <div className="fr-form-title">
                   <code>{sel}</code>
+                  {selEntry?.fromRules && (
+                    <span className="fr-badge rules-only">仅规则</span>
+                  )}
                   {selStat && (
                     <span className="fr-meta">
                       {selStat.coverage != null && ` · 覆盖率 ${(selStat.coverage * 100).toFixed(0)}%`}
@@ -317,6 +474,12 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                     </span>
                   )}
                 </div>
+                {selEntry?.fromRules && (
+                  <p className="fr-vp-hint">
+                    该字段的规则来自规则输入框，但当前数据中<strong>不存在</strong>同名字段
+                    —— 可能是字段名写错或规则文件用错。可在此修改，或用底部「清除该字段规则」删掉。
+                  </p>
+                )}
 
                 {/* 基础 */}
                 <div className="fr-group">
@@ -460,7 +623,7 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
         <footer className="fieldrules-foot">
           {confirmError && <span className="fieldrules-err">{confirmError}</span>}
           <span className="spacer" />
-          <button className="btn outline" onClick={removeCurrent} disabled={!sel || isRemoved || sel === VP_KEY}>清除该字段规则</button>
+          <button className="btn outline" onClick={removeCurrent} disabled={!sel || isRemoved || sel === VP_KEY || sel === GLOBAL_KEY}>清除该字段规则</button>
           <button className="btn primary" onClick={onConfirm}>确认并应用到规则框</button>
         </footer>
       </div>

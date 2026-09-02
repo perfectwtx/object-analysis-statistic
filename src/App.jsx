@@ -615,10 +615,9 @@ export default function App() {
             <button
               className="btn link sm"
               onClick={() => openFieldRules('analysis')}
-              disabled={!result}
-              title="基于分析结果字段，逐字段可视化配置规则"
+              title="可视化配置规则：全局 runtime / expectations、值解析，以及逐字段类型·转换·质量检查·PII（含规则框里已配置的字段）"
             >
-              字段配置
+              配置
             </button>
           </div>
           <RulesEditor
@@ -828,9 +827,9 @@ export default function App() {
               <button
                 className="btn outline"
                 onClick={() => { setPreflightModal(null); openFieldRules('preflight'); }}
-                title="按样本字段逐字段配置规则"
+                title="打开可视化规则配置（样本字段 + 规则里已配置的字段）"
               >
-                按字段配置规则
+                打开规则配置
               </button>
             </div>
           </div>

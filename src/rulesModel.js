@@ -56,6 +56,36 @@ export function getFieldsMap(rulesObj) {
   return f && typeof f === 'object' && !Array.isArray(f) ? f : {};
 }
 
+/**
+ * 合并「数据字段」与「规则文本里已配置的字段」，得到弹窗左侧要展示的完整列表。
+ *
+ * 为什么需要：弹窗原先只列数据字段（预检样本 / 分析结果），
+ * 规则框里手写的字段规则如果字段名不在数据里（用错规则文件、字段拼错、还没分析），
+ * 就完全不显示 —— 用户看到的是"规则里明明配了，弹窗里却没有"。
+ * 这里把两边并起来：数据字段在前（保留原顺序、带 stat），规则里独有的追加在后并标记。
+ *
+ * @param {Array<{name: string, stat?: object}>} dataFields 数据侧字段
+ * @param {Record<string, object>} fieldsMap 规则里的 fields 映射
+ * @returns {Array<{name: string, stat?: object, fromRules?: boolean, inRules: boolean}>}
+ */
+export function mergeFieldList(dataFields, fieldsMap) {
+  const map = (fieldsMap && typeof fieldsMap === 'object') ? fieldsMap : {};
+  const has = (n) => Object.prototype.hasOwnProperty.call(map, n);
+  const list = [];
+  const seen = new Set();
+  for (const f of dataFields || []) {
+    if (!f || !f.name || seen.has(f.name)) continue;
+    seen.add(f.name);
+    list.push({ ...f, inRules: has(f.name) });
+  }
+  for (const name of Object.keys(map)) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    list.push({ name, fromRules: true, inRules: true });
+  }
+  return list;
+}
+
 /** 单个后端 FieldRule → 可编辑草稿（空值归一成"未设置"，便于判断用户是否改动）。 */
 export function ruleToDraft(rule) {
   rule = rule || {};
@@ -163,6 +193,184 @@ export function draftToValueParser(d) {
  * @param {Array<[string, {draft?: object, remove?: boolean}]>} entries 字段名 → 草稿或"删除"标记
  * @param {{valueParsers?: object[]}} [vpOverride] 可选：覆盖顶层 valueParsers（传空数组会删除该项）
  */
+// ───────────────────────────────────────────────────────────────────────────
+// 全局配置：后端顶层 runtime（12 个子组 ~30 个键）+ expectations（2 个键）
+// FieldRulesModal 的左侧列表会提供一个「⚙️ 全局配置」入口，把原先只能手写进
+// JSON 文本框的规则全部可视化出来。
+//
+// 每个 group 的 section 对应 runtime 下的子对象名（'top' 表示直接挂在 runtime 下）；
+// 字段 type：tribool（未设置/true/false，三态）、number、text、csv（逗号分隔，序列化时转数组）。
+// 标记 cliOnly 的 group 仅对命令行生效（Web 端分析不生成文件），在 UI 中折叠呈现。
+export const RUNTIME_GROUPS = [
+  {
+    section: 'top', title: '解析行为',
+    fields: [
+      { k: 'flatten', label: '扁平化 flatten', type: 'tribool', help: '嵌套对象是否展平为点分隔字段；缺省 true' },
+      { k: 'csvInferNumbers', label: 'CSV 数值推断 csvInferNumbers', type: 'tribool', help: 'CSV 列是否按内容推断为 Number；缺省 true' },
+      { k: 'maxValuesToShow', label: '取值 Top N maxValuesToShow', type: 'number', help: '取值分布展示的最大取值数；缺省 5' },
+      { k: 'maxParallelism', label: '最大并行度 maxParallelism', type: 'number', help: '并行解析线程数；缺省 -1（自动）' },
+      { k: 'allowUnknownRules', label: '允许未知规则 allowUnknownRules', type: 'tribool', help: '忽略规则里的未知键而不报错；缺省 false' },
+      { k: 'selectedFields', label: '仅分析字段 selectedFields', type: 'csv', help: '逗号分隔的字段名白名单' },
+      { k: 'filter', label: '行级过滤表达式 filter', type: 'text', help: '如 Age > 18 && Status == "active"' },
+    ],
+  },
+  {
+    section: 'sampling', title: '采样 Sampling',
+    fields: [
+      { k: 'reservoir', label: '蓄水池大小 reservoir', type: 'number', help: '随机抽样保留条数；0 = 不抽样' },
+      { k: 'step', label: '步进 step', type: 'number', help: '每隔 step 条取 1 条；0 = 全量' },
+    ],
+  },
+  {
+    section: 'jsonPath', title: 'JSONPath',
+    fields: [
+      { k: 'root', label: '根路径 root', type: 'text', help: '从指定 JSONPath 作为根容器' },
+      { k: 'record', label: '记录路径 record', type: 'text', help: '从指定 JSONPath 逐条抽取记录' },
+    ],
+  },
+  {
+    section: 'gates', title: '门禁 Gates',
+    fields: [
+      { k: 'failOnViolations', label: '违规即失败 failOnViolations', type: 'tribool', help: '任一期望/质量违规即视为失败；缺省 false' },
+      { k: 'failOnOutlierRatio', label: '异常值占比门禁 failOnOutlierRatio', type: 'number', help: '超过该比例（0~1）判失败' },
+    ],
+  },
+  {
+    section: 'pii', title: 'PII / 合规',
+    fields: [
+      { k: 'off', label: '关闭 PII 打码 pii.off', type: 'tribool', help: '完全关闭自动 PII 识别；缺省 false' },
+      { k: 'report', label: 'PII 报告路径 pii.report', type: 'text', help: '合规报告输出位置' },
+      { k: 'failOnLevel', label: 'PII 门禁等级 pii.failOnLevel', type: 'text', help: '如 high / medium / low' },
+    ],
+  },
+  {
+    section: 'deepAnalysis', title: '深度分析 Deep Analysis',
+    fields: [
+      { k: 'correlation', label: '相关性 correlation', type: 'tribool' },
+      { k: 'stringPatterns', label: '字符串模式 stringPatterns', type: 'tribool' },
+      { k: 'unicodeHygiene', label: 'Unicode 卫生 unicodeHygiene', type: 'tribool' },
+      { k: 'timeSeries', label: '时间序列 timeSeries', type: 'tribool' },
+      { k: 'distributionSnapshot', label: '分布快照 distributionSnapshot', type: 'tribool' },
+      { k: 'fuzzyDedupField', label: '模糊去重字段 fuzzyDedupField', type: 'text', help: '在此字段上做模糊去重' },
+    ],
+  },
+  {
+    section: 'memory', title: '内存预算 Memory',
+    fields: [
+      { k: 'maxMB', label: '最大内存 MB maxMB', type: 'number', help: '0 = 不限制' },
+      { k: 'mode', label: '模式 mode', type: 'text', help: 'soft / strict' },
+    ],
+  },
+  {
+    section: 'schema', title: 'Schema 演进（CLI）', cliOnly: true,
+    fields: [
+      { k: 'snapshot', label: 'snapshot', type: 'text' },
+      { k: 'diffBaseline', label: 'diffBaseline', type: 'text' },
+      { k: 'diffReport', label: 'diffReport', type: 'text' },
+      { k: 'allowBreakingChanges', label: 'allowBreakingChanges', type: 'tribool', help: '缺省 true' },
+    ],
+  },
+  {
+    section: 'distribution', title: '分布漂移（CLI）', cliOnly: true,
+    fields: [
+      { k: 'snapshot', label: 'snapshot', type: 'text' },
+      { k: 'diffBaseline', label: 'diffBaseline', type: 'text' },
+      { k: 'diffReport', label: 'diffReport', type: 'text' },
+      { k: 'lowConfidenceWidth', label: 'lowConfidenceWidth', type: 'number' },
+    ],
+  },
+  {
+    section: 'checkpoint', title: '检查点 / 基线（CLI）', cliOnly: true,
+    fields: [
+      { k: 'path', label: 'path', type: 'text' },
+      { k: 'resumeFrom', label: 'resumeFrom', type: 'text' },
+      { k: 'baseline', label: 'baseline', type: 'text' },
+    ],
+  },
+  {
+    section: 'audit', title: '审计（CLI）', cliOnly: true,
+    fields: [
+      { k: 'log', label: 'log', type: 'text' },
+      { k: 'operator', label: 'operator', type: 'text' },
+    ],
+  },
+  {
+    section: 'outputs', title: '输出（CLI）', cliOnly: true,
+    fields: [
+      { k: 'primary', label: 'primary', type: 'text' },
+      { k: 'violations', label: 'violations', type: 'text' },
+      { k: 'quality', label: 'quality', type: 'text' },
+      { k: 'schemaCode', label: 'schemaCode', type: 'text' },
+    ],
+  },
+  {
+    section: 'progress', title: '进度（CLI）', cliOnly: true,
+    fields: [
+      { k: 'enabled', label: 'enabled', type: 'tribool', help: '缺省 true' },
+    ],
+  },
+];
+
+// 数据集级期望（独立顶层键 expectations）
+export const EXPECTATIONS_FIELDS = [
+  { k: 'minRowCount', label: '最少行数 minRowCount', type: 'number' },
+  { k: 'maxDuplicateRate', label: '最大重复率 maxDuplicateRate（0~1）', type: 'number' },
+];
+
+/** 从规则对象取出全局草稿：runtime 嵌套对象 + expectations 两个数值。 */
+export function initGlobal(rulesObj) {
+  const rtRaw = rulesObj.runtime && typeof rulesObj.runtime === 'object' ? rulesObj.runtime : {};
+  const runtimeDraft = {};
+  for (const [k, v] of Object.entries(rtRaw)) {
+    runtimeDraft[k] = k === 'selectedFields'
+      ? (Array.isArray(v) ? v.join(', ') : (v ?? ''))
+      : v;
+  }
+  const e = rulesObj.expectations && typeof rulesObj.expectations === 'object' ? rulesObj.expectations : {};
+  const expectationsDraft = {
+    minRowCount: e.minRowCount ?? '',
+    maxDuplicateRate: e.maxDuplicateRate ?? '',
+  };
+  return { runtimeDraft, expectationsDraft };
+}
+
+/** 递归清理：空串/空数组/空对象 → undefined（不写出）；保留 0 与 false。 */
+function cleanRuntime(obj) {
+  if (obj == null) return undefined;
+  if (Array.isArray(obj)) return obj.length ? obj : undefined;
+  if (typeof obj === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const cv = cleanRuntime(v);
+      if (cv !== undefined) out[k] = cv;
+    }
+    return Object.keys(out).length ? out : undefined;
+  }
+  if (typeof obj === 'string') return obj.length ? obj : undefined;
+  return obj; // number / boolean 原样保留（含 0 与 false）
+}
+
+/** 把全局草稿序列化为 { runtime?, expectations? }；空的子组不写出。 */
+export function serializeGlobal(runtimeDraft, expectationsDraft) {
+  const rt = {};
+  for (const [k, v] of Object.entries(runtimeDraft || {})) {
+    if (k === 'selectedFields') {
+      if (typeof v === 'string' && v.trim()) {
+        rt.selectedFields = v.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+    } else {
+      rt[k] = v;
+    }
+  }
+  const runtime = cleanRuntime(rt);
+  const exp = {};
+  const e = expectationsDraft || {};
+  if (e.minRowCount !== '' && e.minRowCount != null) exp.minRowCount = Number(e.minRowCount);
+  if (e.maxDuplicateRate !== '' && e.maxDuplicateRate != null) exp.maxDuplicateRate = Number(e.maxDuplicateRate);
+  const expectations = Object.keys(exp).length ? exp : undefined;
+  return { runtime, expectations };
+}
+
 // 表单能管理的字段键。合并时对"被编辑过的字段"先清掉这些键再写入新值，
 // 既能正确反映用户的清空/修改，又能保留后端返回、但表单不认识的其它键（避免原配置被静默抹掉）。
 const MANAGED_KEYS = [
@@ -170,7 +378,7 @@ const MANAGED_KEYS = [
   'minValue', 'maxValue', 'nullRateMax', 'maxOutlierRatio', 'redact', 'pii', 'transform',
 ];
 
-export function mergeDraftsIntoRulesText(rulesText, entries, vpOverride) {
+export function mergeDraftsIntoRulesText(rulesText, entries, vpOverride, globalOverride) {
   const rulesObj = parseRulesText(rulesText);
   const fields = getFieldsMap(rulesObj);
   for (const [name, entry] of entries) {
@@ -191,6 +399,16 @@ export function mergeDraftsIntoRulesText(rulesText, entries, vpOverride) {
       rulesObj.valueParsers = vpOverride.valueParsers;
     } else {
       delete rulesObj.valueParsers;
+    }
+  }
+  if (globalOverride) {
+    if ('runtime' in globalOverride) {
+      if (globalOverride.runtime) rulesObj.runtime = globalOverride.runtime;
+      else delete rulesObj.runtime;
+    }
+    if ('expectations' in globalOverride) {
+      if (globalOverride.expectations) rulesObj.expectations = globalOverride.expectations;
+      else delete rulesObj.expectations;
     }
   }
   return JSON.stringify(rulesObj, null, 2);
