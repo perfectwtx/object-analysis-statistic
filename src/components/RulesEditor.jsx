@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { parseJsonc } from '../utils.js';
+import { formatJsonc, parseJsonc } from '../utils.js';
 
 export const RULES_TEMPLATE = `{
   // 全局运行配置放在 runtime 下（旧版的顶层 flatten 已迁入 runtime.flatten）
@@ -91,7 +91,27 @@ export default function RulesEditor({
 }) {
   const fileInput = useRef(null);
   const [importError, setImportError] = useState('');
+  const [fmtError, setFmtError] = useState('');
   const checking = check?.state === 'checking';
+
+  // 把规则框里的 JSONC 重新排版为 2 空格缩进；保留注释；解析失败则提示不覆盖
+  const onFormat = () => {
+    setFmtError('');
+    if (!text || !text.trim()) return;
+    try {
+      parseJsonc(text); // 先验证，避免把非法内容格式化后反而更乱
+    } catch (e) {
+      setFmtError(`无法格式化：${e.message}`);
+      return;
+    }
+    const formatted = formatJsonc(text);
+    if (!formatted) {
+      setFmtError('格式化失败：内容为空或无法解析');
+      return;
+    }
+    setText(formatted);
+    onValidate?.(formatted); // 刷新校验状态条
+  };
 
   const onImport = (e) => {
     const file = e.target.files?.[0];
@@ -127,20 +147,31 @@ export default function RulesEditor({
         <span>
           支持 <code>//</code> 与 <code>/* */</code> 注释、尾随逗号
         </span>
-        <button
-          className="btn link"
-          onClick={() => onValidate?.()}
-          disabled={checking}
-          title="提交给后端 /api/rules/validate 校验字段类型与结构"
-        >
-          {checking ? '校验中…' : '校验'}
-        </button>
+        <span className="rules-note-actions">
+          <button
+            className="btn link"
+            onClick={onFormat}
+            disabled={!text || !text.trim()}
+            title="把规则框里的 JSONC 重新排版为 2 空格缩进（保留注释）"
+          >
+            格式化
+          </button>
+          <button
+            className="btn link"
+            onClick={() => onValidate?.()}
+            disabled={checking}
+            title="提交给后端 /api/rules/validate 校验字段类型与结构"
+          >
+            {checking ? '校验中…' : '校验'}
+          </button>
+        </span>
       </div>
 
       <RulesCheckBar check={check} />
 
       {error && <div className="error side-error">{error}</div>}
       {importError && <div className="error side-error">{importError}</div>}
+      {fmtError && <div className="error side-error">{fmtError}</div>}
       <div className="side-actions">
         <button className="btn primary block" onClick={onApply} disabled={busy}>
           {busy ? '分析中…' : '应用规则'}

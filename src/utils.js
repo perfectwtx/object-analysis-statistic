@@ -198,6 +198,147 @@ export function toBackendRulesText(text) {
   return stripTrailingCommas(text);
 }
 
+// ---------- 规则配置框「格式化 JSON」 ----------
+//
+// 把带注释（// 与 /* */）和尾随逗号的 JSONC 重新排版为 2 空格缩进的整洁文本，
+// 且**保留注释**（编辑器本身支持注释，格式化不应把注释抹掉）。
+// 解析失败（括号不配对等）时返回 null，调用方据此决定是否覆盖原文。
+
+/** 词法切分：结构符 / 字符串 / 字面量（数字·布尔·null）/ 注释，全部保留 */
+function tokenizeJsonc(src) {
+  const n = src.length;
+  const tokens = [];
+  let i = 0;
+  while (i < n) {
+    const ch = src[i];
+    if (/\s/.test(ch)) { i += 1; continue; }
+    if (ch === '/' && src[i + 1] === '/') {
+      let j = i + 2;
+      while (j < n && src[j] !== '\n') j += 1;
+      tokens.push({ t: 'cmt', kind: 'line', text: src.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if (ch === '/' && src[i + 1] === '*') {
+      let j = i + 2;
+      while (j < n && !(src[j] === '*' && src[j + 1] === '/')) j += 1;
+      const end = Math.min(j + 2, n);
+      tokens.push({ t: 'cmt', kind: 'block', text: src.slice(i, end) });
+      i = end;
+      continue;
+    }
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < n) {
+        if (src[j] === '\\') { j += 2; continue; }
+        if (src[j] === '"') { j += 1; break; }
+        j += 1;
+      }
+      tokens.push({ t: 'str', text: src.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if ('{}[],:'.includes(ch)) { tokens.push({ t: ch }); i += 1; continue; }
+    let j = i;
+    while (j < n && !'{}[],:\n\r\t "/'.includes(src[j])) j += 1;
+    tokens.push({ t: 'lit', text: src.slice(i, j) });
+    i = j;
+  }
+  return tokens;
+}
+
+const INDENT = '  ';
+
+/** 从 tokens[p] 处读出一个值（可能是容器，返回多行字符串），p 随之前进 */
+function emitValue(tokens, p, pad) {
+  const tok = tokens[p.v];
+  if (!tok) return { str: '', p };
+  if (tok.t === '{' || tok.t === '[') return emitContainer(tokens, p, tok.t === '{', pad);
+  if (tok.t === 'str' || tok.t === 'lit') { p.v += 1; return { str: tok.text, p }; }
+  p.v += 1;
+  return { str: '', p };
+}
+
+/** 读出一个 {…} / […] 容器；pad 为容器内部内容的缩进前缀 */
+function emitContainer(tokens, p, isObj, pad) {
+  p.v += 1; // 吃掉 {
+  const close = isObj ? '}' : ']';
+  const childPad = pad + INDENT;
+  const lines = [];
+  while (p.v < tokens.length && tokens[p.v].t !== close) {
+    // 成员前的独立注释（行注释 / 块注释）单独成行
+    while (tokens[p.v]?.t === 'cmt') {
+      lines.push(childPad + tokens[p.v].text);
+      p.v += 1;
+    }
+    if (p.v >= tokens.length || tokens[p.v].t === close) break;
+
+    let body;
+    if (isObj) {
+      const keyR = emitValue(tokens, p, childPad);
+      p = keyR.p;
+      if (tokens[p.v]?.t === ':') p.v += 1;
+      const valR = emitValue(tokens, p, childPad);
+      p = valR.p;
+      body = `${keyR.str}: ${valR.str}`;
+    } else {
+      const valR = emitValue(tokens, p, childPad);
+      p = valR.p;
+      body = valR.str;
+    }
+    // 成员值右侧紧跟的行注释，并到同一行末尾
+    if (tokens[p.v]?.t === 'cmt' && tokens[p.v].kind === 'line') {
+      body += ` ${tokens[p.v].text}`;
+      p.v += 1;
+    }
+    // 后面若还有成员（跳过注释后是值而非右括号），则补逗号
+    let needComma = false;
+    if (tokens[p.v]?.t === ',') {
+      let r = p.v + 1;
+      while (tokens[r]?.t === 'cmt') r += 1;
+      if (tokens[r] && tokens[r].t !== close) needComma = true;
+      p.v += 1; // 吃掉逗号
+    }
+    if (needComma) body += ',';
+    lines.push(childPad + body);
+
+    // 没有逗号也没有右括号 → 结构异常，避免死循环
+    if (!needComma && tokens[p.v]?.t !== close) break;
+  }
+  if (tokens[p.v]?.t === close) p.v += 1;
+
+  const open = isObj ? '{' : '[';
+  const closeStr = isObj ? '}' : ']';
+  if (lines.length === 0) return { str: open + closeStr, p };
+  return { str: `${open}\n${lines.join('\n')}\n${pad}${closeStr}`, p };
+}
+
+/** 把 JSONC 文本重新排版为 2 空格缩进；解析失败时返回 null */
+export function formatJsonc(text) {
+  if (typeof text !== 'string' || !text.trim()) return null;
+  const tokens = tokenizeJsonc(text);
+  if (tokens.length === 0) return null;
+  const p = { v: 0 };
+  const root = emitContainerRoot(tokens, p);
+  const trailing = [];
+  while (p.v < tokens.length) {
+    const tk = tokens[p.v];
+    if (tk.t === 'cmt') trailing.push(tk.text);
+    p.v += 1;
+  }
+  let result = root;
+  if (trailing.length) result += `\n${trailing.join('\n')}`;
+  return result;
+}
+
+function emitContainerRoot(tokens, p) {
+  const tok = tokens[p.v];
+  if (!tok) return '';
+  if (tok.t === '{' || tok.t === '[') return emitContainer(tokens, p, tok.t === '{', '').str;
+  if (tok.t === 'str' || tok.t === 'lit') { p.v += 1; return tok.text; }
+  return '';
+}
+
 // ---------- 后端规则校验错误 → 中文提示 ----------
 //
 // 后端返回的是 System.Text.Json 的英文异常，形如：

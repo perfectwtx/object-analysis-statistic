@@ -10,6 +10,7 @@ import TypeChart from './components/TypeChart.jsx';
 import FieldTable from './components/FieldTable.jsx';
 import ValueDistribution from './components/ValueDistribution.jsx';
 import RulesEditor, { RULES_TEMPLATE } from './components/RulesEditor.jsx';
+import FieldRulesModal from './components/FieldRulesModal.jsx';
 import QualityPanel from './components/QualityPanel.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -103,6 +104,10 @@ export default function App() {
   const [elapsed, setElapsed] = useState(null);
   // 方案 B：预检命中「用错规则文件」时挂起的确认弹框与待执行分析参数
   const [preflightModal, setPreflightModal] = useState(null); // { ruleFields, sampleFields, truncated }
+  // 字段规则可视化配置弹窗
+  const [fieldRulesOpen, setFieldRulesOpen] = useState(false);
+  const [fieldRulesSource, setFieldRulesSource] = useState('analysis'); // 'preflight' | 'analysis'
+  const [fieldRulesFields, setFieldRulesFields] = useState([]); // [{ name, stat? }]
   const [pendingRun, setPendingRun] = useState(null); // { src, opts }
   const [baseUrlInput, setBaseUrlInput] = useState(() => getBaseUrl());
   const [features, setFeatures] = useState(loadFeatures);
@@ -356,6 +361,29 @@ export default function App() {
     if (source) runAnalysis(source, null);
   };
 
+  // ---------- 字段级规则可视化配置 ----------
+  // 打开弹窗：根据来源提供字段列表（preflight 用样本字段名，analysis 用结果字段含元数据）
+  const openFieldRules = useCallback((src) => {
+    if (src === 'preflight') {
+      const names = preflightModal?.sampleFields ?? [];
+      setFieldRulesFields(names.map((name) => ({ name })));
+      setFieldRulesSource('preflight');
+    } else {
+      const stats = result?.fieldStatistics ?? [];
+      setFieldRulesFields(stats.map((f) => ({ name: f.fieldName, stat: f })));
+      setFieldRulesSource('analysis');
+    }
+    setFieldRulesOpen(true);
+  }, [preflightModal, result]);
+
+  // 弹窗确认：写回规则文本并触发后端校验，返回是否通过（不通过则弹窗保持打开）
+  const applyFieldRules = useCallback(async (text) => {
+    setRulesText(text);
+    setRulesError('');
+    const res = await checkRules(text);
+    return res.ok;
+  }, [checkRules]);
+
   // ---------- 数据源载入 ----------
   const onFile = async (e) => {
     const file = e.target.files?.[0];
@@ -584,6 +612,14 @@ export default function App() {
           <div className="side-title">
             规则配置
             {rules && <span className="badge semantic rules-on">已生效</span>}
+            <button
+              className="btn link sm"
+              onClick={() => openFieldRules('analysis')}
+              disabled={!result}
+              title="基于分析结果字段，逐字段可视化配置规则"
+            >
+              字段配置
+            </button>
           </div>
           <RulesEditor
             text={rulesText}
@@ -789,10 +825,35 @@ export default function App() {
             <div className="preflight-actions">
               <button className="btn primary" onClick={confirmPreflight}>仍然继续分析</button>
               <button className="btn outline" onClick={cancelPreflight}>取消并修改规则</button>
+              <button
+                className="btn outline"
+                onClick={() => { setPreflightModal(null); openFieldRules('preflight'); }}
+                title="按样本字段逐字段配置规则"
+              >
+                按字段配置规则
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ---------- 字段级规则可视化配置弹窗 ---------- */}
+      <FieldRulesModal
+        open={fieldRulesOpen}
+        source={fieldRulesSource}
+        inputFormat={fieldRulesSource === 'analysis'
+          ? (result?._api?.format ?? '')
+          : (() => {
+              const name = source?.file?.name?.toLowerCase() ?? '';
+              if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.xlsm')) return 'excel';
+              if (name.endsWith('.csv')) return 'csv';
+              return '';
+            })()}
+        fields={fieldRulesFields}
+        rulesText={rulesText}
+        onApply={applyFieldRules}
+        onClose={() => setFieldRulesOpen(false)}
+      />
     </div>
   );
 }
