@@ -16,6 +16,64 @@ export const CHECK_LABELS = {
   outlierRatio: '异常值占比超标',
 };
 
+// ---------- 规则字段 vs 数据字段 预检（对齐后端 ObjectAnalyzer.Web 的 PreflightChecker） ----------
+//
+// 复刻后端「用错规则文件」防御的核心判定（方案 B 预检 + 方案 D 结果兜底共用同一套语义）。
+// 判定规则与 PreflightChecker.Build 完全一致：
+//   规则字段 X 命中数据字段 Y，当且仅当 Y == X（大小写不敏感）或 Y 以 "X." 开头
+//   （X 是 Y 的父路径）。后者覆盖 parse:json 把 A.body 展平为 A.body.foo 的场景——
+//   原始的 A.body 在结果里已被替换为子字段，靠父路径匹配仍能认出"规则确实覆盖到了数据"。
+//
+// 入参都是字段名数组（顺序无所谓）。hasWarning 触发条件：规则字段非空 且 数据字段非空
+// 且 一个都没匹配上（与后端 `sampleFields.Count > 0 && matched.Count == 0` 同义）。
+export function computeRuleFieldWarning(ruleFieldNames, dataFieldNames) {
+  // 1) 规则字段：去重（大小写不敏感）、剔除空名、保留首次出现顺序
+  const ruleFields = [];
+  const ruleSeen = new Set();
+  for (const f of ruleFieldNames || []) {
+    if (!f || !String(f).trim()) continue;
+    const key = String(f);
+    const lower = key.toLowerCase();
+    if (ruleSeen.has(lower)) continue;
+    ruleSeen.add(lower);
+    ruleFields.push(key);
+  }
+  if (ruleFields.length === 0) {
+    return { hasWarning: false, ruleFields, matched: [], unmatched: [], dataFields: [] };
+  }
+
+  // 2) 数据字段：去重（大小写不敏感）、保留首次出现顺序，并记录小写集合
+  const dataFields = [];
+  const dataLowerSet = new Set();
+  for (const f of dataFieldNames || []) {
+    if (!f || !String(f).trim()) continue;
+    const key = String(f);
+    const lower = key.toLowerCase();
+    if (dataLowerSet.has(lower)) continue;
+    dataLowerSet.add(lower);
+    dataFields.push(key);
+  }
+
+  // 3) 比对：大小写不敏感 + 父路径匹配
+  const matched = [];
+  const unmatched = [];
+  for (const f of ruleFields) {
+    const lower = f.toLowerCase();
+    let isMatched = dataLowerSet.has(lower);
+    if (!isMatched) {
+      const prefix = lower + '.';
+      for (const d of dataLowerSet) {
+        if (d.startsWith(prefix)) { isMatched = true; break; }
+      }
+    }
+    if (isMatched) matched.push(f); else unmatched.push(f);
+  }
+
+  // 4) 判定：有规则字段 + 数据字段都拿到 + 一个都没匹配上 → 警告
+  const hasWarning = dataFields.length > 0 && matched.length === 0;
+  return { hasWarning, ruleFields, matched, unmatched, dataFields };
+}
+
 // ---------- JSONC 解析（规则配置支持注释） ----------
 //
 // 规则编辑器允许写 `//`、`/* */` 注释和尾随逗号（后端的 rules_full_reference.jsonc

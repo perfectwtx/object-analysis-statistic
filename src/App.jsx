@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { download, toCsv, toHtml, toJson, toJsonSchema, toMarkdown } from './exporters.js';
-import { analyzeFile, fetchRulesReference, getBaseUrl, health, setBaseUrl, validateRules } from './api.js';
+import { analyzeFile, fetchRulesReference, getBaseUrl, health, preflight, setBaseUrl, validateRules } from './api.js';
 import { adaptAnalysisResponse } from './adapter.js';
-import { formatRulesError, parseJsonc, toBackendRulesText } from './utils.js';
+import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from './utils.js';
 import { SAMPLE_DATA } from './sampleData.js';
 import OverviewCards from './components/OverviewCards.jsx';
 import CoverageChart from './components/CoverageChart.jsx';
@@ -92,12 +92,18 @@ export default function App() {
   const [tab, setTab] = useState('fields');
   const [textFormat, setTextFormat] = useState('json');
   const fileInput = useRef(null);
+  // 分析请求的中止控制器与取消标记：busy 时提供「取消」按钮真实中止 fetch
+  const abortRef = useRef(null);
+  const cancelledRef = useRef(false);
 
   // 分析结果与后端状态
   const [result, setResult] = useState(null);
   const [apiState, setApiState] = useState({ status: 'unknown', version: null, error: null });
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  // 方案 B：预检命中「用错规则文件」时挂起的确认弹框与待执行分析参数
+  const [preflightModal, setPreflightModal] = useState(null); // { ruleFields, sampleFields, truncated }
+  const [pendingRun, setPendingRun] = useState(null); // { src, opts }
   const [baseUrlInput, setBaseUrlInput] = useState(() => getBaseUrl());
   const [features, setFeatures] = useState(loadFeatures);
   const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
@@ -158,6 +164,18 @@ export default function App() {
 
   const violationCount = result?.qualityViolations?.length ?? 0;
 
+  // ---------- 方案 D：分析完成后再次校验规则字段是否命中数据字段（对齐后端 ResultWarning） ----------
+  // 复刻后端 ObjectAnalyzer.Web 的"兜底"防御：规则里配置的字段若在分析结果中一个都没出现，
+  // 大概率是"用错了规则文件"（规则与数据不匹配）。直接展示横幅提示，避免用户误以为分析成功。
+  // 判定语义与后端 PreflightChecker.Build 完全一致（大小写不敏感 + 父路径匹配）。
+  const ruleFieldWarning = useMemo(() => {
+    if (!result || !rules) return null;
+    const ruleFields = Object.keys(rules.fields || {});
+    const dataFields = result.fieldStatistics.map((f) => f.fieldName);
+    const w = computeRuleFieldWarning(ruleFields, dataFields);
+    return w.hasWarning ? w : null;
+  }, [result, rules]);
+
   // ---------- 后端健康检查 ----------
   const checkApi = useCallback(async () => {
     setApiState({ status: 'checking', version: null, error: null });
@@ -172,31 +190,18 @@ export default function App() {
   useEffect(() => { checkApi(); }, [checkApi]);
 
   // ---------- 分析（全部由后端执行） ----------
-  // rulesOverride：applyRules 里刚解析出来的规则还没进 state，需要显式传进来，
-  // 否则「应用规则」第一次点击会因为闭包里的 rules 仍是旧值而漏发规则。
-  const runAnalysis = useCallback(async (src, rulesJson, rulesOverride) => {
+  // 实际发起分析请求。预检通过 / 无规则 / 无命中后都会走到这里；
+  // 预检弹框「仍然继续分析」也是调用它（沿用挂起的 opts）。
+  const executeAnalysis = useCallback(async (src, opts) => {
     if (!src?.file) return;
-    const activeRules = rulesOverride !== undefined ? rulesOverride : rules;
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    cancelledRef.current = false;
     setBusy(true);
     setError('');
     const t0 = performance.now();
     try {
-      // 新后端把 flatten/selectedFields/filter 从规则顶层迁到了 runtime.*，
-      // 旧式顶层写法会被判为未知键（valid:false）阻断分析。这里剥离后改走请求选项，
-      // 同时兼容用户在规则里直接写 runtime.* 的新式写法。
-      const { flatten, selectedFields, filter, ...ruleBody } = activeRules || {};
-      const payload = await analyzeFile(src.file, {
-        // ruleBody 已是解析后的纯对象（注释/尾随逗号在 checkRules 阶段已清掉），
-        // 直接 JSON.stringify 即可；绝不能传 toJsonText(object) —— 它会把对象当成 JSONC
-        // 文本去 JSON.parse，失败回退后 FormData 把对象压成 "[object Object]"，
-        // 后端反序列化直接报「could not be converted to AnalysisRules」。
-        rulesJson: activeRules ? JSON.stringify(ruleBody) : null,
-        flatten,
-        fields: selectedFields?.join(','),
-        filter,
-        features,
-        csvInferNumbers: csvInfer,
-      });
+      const payload = await analyzeFile(src.file, { ...opts, request: { signal: ctrl.signal } });
       const adapted = adaptAnalysisResponse(payload);
       adapted._api.elapsedMs = Math.round(performance.now() - t0);
       adapted._api.bytes = src.file.size ?? null;
@@ -204,12 +209,81 @@ export default function App() {
       setElapsed(adapted._api.elapsedMs);
       setApiState((s) => (s.status === 'ok' ? s : { ...s, status: 'ok', error: null }));
     } catch (e) {
-      setError(`分析失败：${e.message}`);
+      if (cancelledRef.current) setError('已取消分析');
+      else setError(`分析失败：${e.message}`);
       setResult(null);
     } finally {
+      if (abortRef.current === ctrl) abortRef.current = null;
       setBusy(false);
     }
-  }, [rules, features, csvInfer]);
+  }, []);
+
+  // 分析进行中点击「取消」：中止底层 fetch，结束本轮请求（不抛错，由 catch 改提示）
+  const cancelAnalysis = () => {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    setBusy(false);
+  };
+
+  // 分析入口：先做「方案 B」预检，规则字段与数据零重叠则弹确认框，用户确认后再真正分析。
+  // rulesOverride：applyRules 里刚解析出来的规则还没进 state，需要显式传进来，
+  // 否则「应用规则」第一次点击会因为闭包里的 rules 仍是旧值而漏发规则。
+  const runAnalysis = useCallback(async (src, rulesJsonText, rulesOverride) => {
+    if (!src?.file) return;
+    const activeRules = rulesOverride !== undefined ? rulesOverride : rules;
+    // 新后端把 flatten/selectedFields/filter 从规则顶层迁到了 runtime.*，
+    // 旧式顶层写法会被判为未知键（valid:false）阻断分析。这里剥离后改走请求选项，
+    // 同时兼容用户在规则里直接写 runtime.* 的新式写法。
+    const { flatten, selectedFields, filter, ...ruleBody } = activeRules || {};
+    const rulesJson = activeRules ? JSON.stringify(ruleBody) : null;
+    const opts = {
+      // ruleBody 已是解析后的纯对象（注释/尾随逗号在 checkRules 阶段已清掉），
+      // 直接 JSON.stringify 即可；绝不能传 toJsonText(object) —— 它会把对象当成 JSONC
+      // 文本去 JSON.parse，失败回退后 FormData 把对象压成 "[object Object]"，
+      // 后端反序列化直接报「could not be converted to AnalysisRules」。
+      rulesJson,
+      flatten,
+      fields: selectedFields?.join(','),
+      filter,
+      features,
+      csvInferNumbers: csvInfer,
+    };
+
+    // 方案 B：只要应用了规则（rulesJson 非空）就先预检。
+    // 不再要求规则必须有显式 fields —— 用 transform / runtime 描述字段的规则（如 Logs 规则）
+    // 同样该被拦截。后端 PreflightChecker 在规则没有任何可校验字段时会返回 hasWarning=false，
+    // 不会误报，所以放宽到"有规则即预检"是安全的。
+    if (rulesJson) {
+      try {
+        const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer });
+        if (pf?.hasWarning) {
+          setPreflightModal({
+            ruleFields: pf.ruleFields ?? [],
+            sampleFields: pf.sampleFields ?? [],
+            truncated: pf.truncatedSampleFieldCount ?? 0,
+          });
+          setPendingRun({ src, opts });
+          return;
+        }
+      } catch {
+        // 预检异常（后端离线 / 规则解析失败等）不阻断分析；方案 D 结果横幅兜底
+      }
+    }
+
+    await executeAnalysis(src, opts);
+  }, [rules, features, csvInfer, executeAnalysis]);
+
+  // 预检弹框：确认继续 → 消费挂起参数立即分析；取消 → 仅关闭，引导去侧栏换规则
+  const confirmPreflight = () => {
+    const pending = pendingRun;
+    setPreflightModal(null);
+    setPendingRun(null);
+    if (pending) executeAnalysis(pending.src, pending.opts);
+  };
+  const cancelPreflight = () => {
+    setPreflightModal(null);
+    setPendingRun(null);
+  };
 
   // ---------- 规则校验 ----------
   // 两段式：先本地查语法（能给出编辑器里的行列），再交后端查结构与类型。
@@ -560,7 +634,10 @@ export default function App() {
           </div>
           <div className="topbar-status">
             {busy && (
-              <span className="busy-indicator"><span className="spinner" />分析中…</span>
+              <span className="busy-indicator">
+                <span className="spinner" />分析中…
+                <button type="button" className="btn-link danger" onClick={cancelAnalysis}>取消</button>
+              </span>
             )}
             {!busy && elapsed != null && (
               <span className="chip api-chip" title="本次分析从提交到拿到结果的端到端耗时">
@@ -585,6 +662,35 @@ export default function App() {
 
         {result && (
           <>
+            {ruleFieldWarning && (
+              <div className="rule-warning" role="alert">
+                <div className="rule-warning-title">⚠ 规则字段与数据字段零重叠</div>
+                <div className="rule-warning-text">
+                  当前规则配置的字段（{ruleFieldWarning.ruleFields.join('、')}）在分析结果中没有任何命中，
+                  可能用错了规则文件（规则与数据不匹配）。请确认左侧「规则配置」是否为该数据对应的规则后重新分析。
+                </div>
+                <details className="rule-warning-detail">
+                  <summary>查看字段明细</summary>
+                  <div className="rule-warning-cols">
+                    <div>
+                      <div className="rw-col-title">规则字段</div>
+                      <ul>
+                        {ruleFieldWarning.ruleFields.map((f) => <li key={f} className="mono">{f}</li>)}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="rw-col-title">数据字段（前 {Math.min(ruleFieldWarning.dataFields.length, 20)} 个）</div>
+                      <ul>
+                        {ruleFieldWarning.dataFields.slice(0, 20).map((f) => <li key={f} className="mono">{f}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                  {ruleFieldWarning.dataFields.length > 20 && (
+                    <div className="rw-trunc">…共 {ruleFieldWarning.dataFields.length} 个数据字段</div>
+                  )}
+                </details>
+              </div>
+            )}
             <OverviewCards result={result} />
             <div className="charts">
               <CoverageChart fields={result.fieldStatistics} />
@@ -638,6 +744,55 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* ---------- 方案 B：用错规则文件预检确认框（分析前拦截） ---------- */}
+      {preflightModal && (
+        <div className="preflight-backdrop" role="dialog" aria-modal="true" aria-labelledby="pf-title">
+          <div className="preflight-modal">
+            <h3 id="pf-title" className="preflight-title">⚠ 规则与数据可能不匹配</h3>
+            <p className="preflight-explain">
+              规则里配置的字段，在前几条数据记录中<strong>一个都没匹配上</strong>，可能是
+              <strong>用错了规则文件</strong>（规则与本数据不对应）。请确认左侧「规则配置」是否为该数据对应的规则：
+            </p>
+            <div className="preflight-fields">
+              <div className="preflight-col">
+                <div className="preflight-col-title">规则字段（{preflightModal.ruleFields.length}）</div>
+                {preflightModal.ruleFields.length === 0 ? (
+                  <span className="preflight-empty">—</span>
+                ) : (
+                  <ul className="preflight-chips">
+                    {preflightModal.ruleFields.map((f) => (
+                      <li key={f} className="preflight-chip rule-chip"><code>{f}</code></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="preflight-col">
+                <div className="preflight-col-title">
+                  数据样本字段（{preflightModal.sampleFields.length}
+                  {preflightModal.truncated > 0 ? `，已截断 +${preflightModal.truncated}` : ''}）
+                </div>
+                {preflightModal.sampleFields.length === 0 ? (
+                  <span className="preflight-empty">—</span>
+                ) : (
+                  <ul className="preflight-chips">
+                    {preflightModal.sampleFields.map((f) => (
+                      <li key={f} className="preflight-chip sample-chip"><code>{f}</code></li>
+                    ))}
+                  </ul>
+                )}
+                {preflightModal.truncated > 0 && (
+                  <p className="preflight-hint">仅展示前 {preflightModal.sampleFields.length} 个样本字段，其余 {preflightModal.truncated} 个已省略。</p>
+                )}
+              </div>
+            </div>
+            <div className="preflight-actions">
+              <button className="btn primary" onClick={confirmPreflight}>仍然继续分析</button>
+              <button className="btn outline" onClick={cancelPreflight}>取消并修改规则</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

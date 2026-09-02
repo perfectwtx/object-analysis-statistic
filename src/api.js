@@ -191,3 +191,36 @@ export async function validateRules(rulesText, opts = {}) {
 export function fetchRulesReference(opts) {
   return request('/rules/reference', { timeout: 10_000, ...opts });
 }
+
+/**
+ * 分析前预检（方案 B 防御「用错规则文件」）。
+ * 后端 /api/preflight 复用 Core 的 PreflightChecker，与 /api/analyze 解析路径完全一致：
+ * 解析前 N 条记录，大小写不敏感 + 父路径匹配规则字段，返回 hasWarning 及字段清单。
+ * 命中即由调用方弹确认框，用户确认后才真正发起分析。
+ *
+ * @param {File} file 数据文件（与 /api/analyze 同款）
+ * @param {object} options
+ *   rulesJson        {string}  内联规则 JSON 文本（优先；与 rules 二选一）
+ *   rules            {File}    规则文件
+ *   flatten          {boolean} JSON 嵌套展平（默认 true，由后端回填）
+ *   csvInferNumbers  {boolean} CSV 数字列推断（默认 true）
+ *   recordPath       {string}  记录级 JSONPath
+ *   allowUnknownRules {boolean} 跳过未知键检查（默认 false）
+ * @returns {Promise<{hasWarning:boolean, ruleFields:string[], matchedRuleFields:string[],
+ *   unmatchedRuleFields:string[], sampleFields:string[], truncatedSampleFieldCount:number}>}
+ *   成功时返回 response.preflight 对象；400 时抛错（含后端中文说明）。
+ */
+export async function preflight(file, options = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  if (options.rulesJson) form.append('rulesJson', options.rulesJson);
+  else if (options.rules) form.append('rules', options.rules);
+  if (options.flatten !== undefined) form.append('flatten', String(options.flatten));
+  if (options.csvInferNumbers !== undefined) form.append('csvInferNumbers', String(options.csvInferNumbers));
+  if (options.recordPath) form.append('recordPath', options.recordPath);
+  if (options.allowUnknownRules !== undefined) form.append('allowUnknownRules', String(options.allowUnknownRules));
+
+  const r = await request('/preflight', { method: 'POST', body: form, timeout: 30_000 });
+  // 后端响应包了一层 { preflight: {...} }，这里透传内层，省得调用方再多解一层
+  return r?.preflight ?? r;
+}

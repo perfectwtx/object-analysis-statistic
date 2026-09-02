@@ -360,6 +360,10 @@ body.col-resizing * { cursor: col-resize !important; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
 .btn.block { width: 100%; }
 .btn.half { flex: 1; padding: 8px 10px; font-size: 12.5px; }
+.btn.outline {
+  background: transparent; color: var(--text); border: 1px solid var(--panel-border);
+}
+.btn.outline:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-strong); }
 
 /* ---------- 规则编辑器（边栏内） ---------- */
 .rules-editor-wrap { display: flex; flex-direction: column; gap: 10px; }
@@ -420,6 +424,148 @@ body.col-resizing * { cursor: col-resize !important; }
   color: var(--err); background: var(--err-bg);
 }
 .unknown-more { margin-top: 4px; font-size: 10.5px; opacity: 0.72; }
+
+/* 规则字段与数据字段零重叠告警（对齐后端 方案 D ResultWarning 兜底提示） */
+.rule-warning {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  border-radius: 12px;
+}
+.rule-warning-title {
+  font-weight: 600;
+  color: var(--warn);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.rule-warning-text {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.rule-warning-detail {
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.rule-warning-detail summary {
+  cursor: pointer;
+  user-select: none;
+}
+.rule-warning-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+.rw-col-title {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.rule-warning-cols ul {
+  margin: 0;
+  padding-left: 16px;
+  max-height: 160px;
+  overflow: auto;
+}
+.rule-warning-cols li {
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+.rw-trunc {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+/* 方案 B 预检确认框（分析前拦截「用错规则文件」）：对齐后端 Home.razor 的 preflight-modal */
+.preflight-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.55);
+  backdrop-filter: blur(3px);
+}
+.preflight-modal {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 22px 24px 20px;
+  border-radius: 16px;
+  background: var(--panel);
+  border: 1px solid var(--warn-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+.preflight-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.preflight-explain {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text);
+}
+.preflight-explain strong { color: var(--warn); font-weight: 600; }
+.preflight-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.preflight-col {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--panel-border);
+}
+.preflight-col-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.preflight-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+.preflight-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+.preflight-chip code { font-family: Consolas, "SFMono-Regular", monospace; }
+.rule-chip { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-border); }
+.sample-chip { color: var(--text); background: var(--surface-3); border: 1px solid var(--panel-border); }
+.preflight-empty { font-size: 13px; color: var(--text-dim); opacity: 0.7; }
+.preflight-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.preflight-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
 .rules-help-note { margin-top: 8px; font-size: 11.5px; color: var(--text-dim); line-height: 1.6; }
 .rules-help ul { margin: 8px 0 0; padding-left: 16px; line-height: 1.9; }
 .rules-help code {
@@ -490,6 +636,8 @@ body.col-resizing * { cursor: col-resize !important; }
   text-decoration: underline; text-underline-offset: 2px;
 }
 .btn-link:hover { color: var(--accent-fg); }
+.btn-link.danger { color: var(--warn); margin-left: 6px; }
+.btn-link.danger:hover { color: var(--warn); opacity: 0.8; }
 
 .api-base, .api-features { width: 100%; margin-top: 2px; }
 .api-base summary, .api-features summary {
