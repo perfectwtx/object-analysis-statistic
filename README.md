@@ -19,11 +19,14 @@ npm run preview  # 本地预览构建产物
 
 早期版本在浏览器内用 JS 复刻了一套分析引擎（`analysis.js` + `parsers.js`），带来两个问题：与 .NET 实现存在偏差，且**大数据集会把浏览器主线程卡死**——其中模糊去重是 O(n²) 全量两两比对，5000 条耗时 27 秒，2 万条可达分钟级。
 
-现在已移除这套本地引擎，分析链路只剩一次 HTTP 请求：
+现在已移除这套本地引擎，分析链路改为**异步作业**：
 
 ```
-选择文件 / 粘贴文本 → FormData → POST /api/analyze → .NET 计算 → 适配层 → 渲染
+选择文件 / 粘贴文本 → multipart → POST /api/analyze/async
+  → 返回 jobId → 经 SSE(/events) 推送进度 → 终态后 GET 作业快照 → 适配层 → 渲染
 ```
+
+小数据集也可用同步接口 `POST /api/analyze` 一次拿回完整结果（无进度推送）。前端默认走异步链路，并用右上角的进度条与「取消」按钮（`POST /cancel` 真实中止后端计算）。
 
 实测端到端耗时（含上传，经 Vite 代理，P4 全开）：
 
@@ -48,10 +51,16 @@ npm run preview  # 本地预览构建产物
 接口清单：
 
 - `GET /api/health` → `{ status, version }`
-- `POST /api/analyze` multipart：`file`、`rulesJson`（内联规则）、`flatten`、`fields`、`filter`、`rootPath`、`recordPath`、`sampleReservoir`、`sampleStep`、`maxParallel` 及 P4 开关
+- `POST /api/analyze/async` multipart：`file`、`rulesJson`（内联规则）；`flatten`、`runtime.*`、`selectedFields`、`filter`、`rootPath`、`recordPath`、`csvInferNumbers`、`maxValuesToShow`、`maxDegreeOfParallelism` 及 P4 开关（`enableCorrelation` / `enableStringPatterns` / `enableUnicodeHygiene` / `enableTimeSeries`）。返回 `{ jobId, status }`，随后：
+  - `GET /api/analyze/async/{jobId}/events` —— **SSE** 流式进度（`pending` → `running` → `complete` / `failed` / `cancelled`），断流可降级轮询；
+  - `GET /api/analyze/async/{jobId}` —— 拉取终态快照 `{ status, meta, preview, result }`（result 为完整 AnalysisResult）；
+  - `POST /api/analyze/async/{jobId}/cancel` —— 真实中止后端计算（已终态返回 `{ cancelled: false }`）
+- `POST /api/analyze` 同步 multipart：参数同 `/async`，但**一次返回 v2 五段视图** `{ overview, preview, fields, deepAnalysis, quality, result }`，无进度推送，适合小数据或脚本调用
 - `POST /api/analyze/raw?format=json` 请求体即文本。规则走查询参数 `rulesJson=`（请求体被数据占用，受请求行长度限制，约 8KB），另有 `allowUnknownRules`；规则较长时改用 `/api/analyze` —— 前端「粘贴数据」就是把文本包装成 File 走 multipart 的
 - `POST /api/rules/validate` **raw body**（不是 multipart），返回 `{ valid, fields, unknowns, error? }`；结构/类型非法时 400 + `{ error }`
 - `GET /api/rules/reference` 返回 `rules_full_reference.jsonc` 原文（纯文本，非 JSON）
+
+> 参数名以 v2 契约为准：`maxDegreeOfParallelism`（非 `maxParallel`）、`maxValuesToShow`（非 `maxValues`）、`flatten`/`selectedFields`/`filter` 也可写在规则文件的 `runtime.*` 下。`P4` 深度分析开关默认仅相关性 / 字符串模式 / Unicode 卫生开启，时间序列 / 分布快照默认关闭。
 
 ## 目录结构
 
@@ -67,7 +76,7 @@ src/
   components/        字段明细表、深度分析、取值分布、质量报告、规则编辑器、主题切换等
 ```
 
-标签页：**字段明细 / 深度分析 / 取值分布 / 质量报告**。其中「取值分布」直接渲染后端返回的 `valueCounts`，因此大文件、压缩包、Excel 等无法在浏览器展开的数据源同样可用。
+标签页：**数据预览 / 字段明细 / 深度分析 / 取值分布 / 质量报告**。「数据预览」展示后端返回的样本记录（流经管线的前 N 条，超量截断，非全量原始数据）；「取值分布」直接渲染后端返回的 `valueCounts`，因此大文件、压缩包、Excel 等无法在浏览器展开的数据源同样可用。
 
 ## 功能概览
 
@@ -94,7 +103,7 @@ src/
 - **模糊去重不可用**：后端 `ObjectAnalyzer.Analyze` 不产出 `FuzzyDuplicates`（该结果只在 CLI 的 `AnalysisRunner` 路径生成），界面上该卡片标注「未开启」。需要这项能力得改后端，让 API 路径也执行该逻辑
 - 相关性有前置条件：至少 2 个数值字段且每字段样本数 ≥ 3，否则后端返回空
 - 分布快照依赖 CLI 的 `--snapshot` 导出文件，API 响应不返回，界面上该项置灰标注「仅 CLI」
-- 后端不返回原始记录，因此没有行级「数据预览」；改用「取值分布」展示各字段高频值
+- 后端不返回全量原始记录，但会随响应附带**流经管线前 N 条样本**（`preview`，默认 20 条，超量截断），前端据此提供「数据预览」标签页；需要全量行级浏览仍需在数据源侧处理
 - 后端的 `System.Text.Json` 规则反序列化开了 `ReadCommentHandling.Skip`（**能读注释**），但没开 `AllowTrailingCommas`（**不接受尾随逗号**）。因此提交分两种形态：校验用 `toBackendRulesText()`（只去尾随逗号、保留注释与换行，保证后端报错的 `LineNumber` 能对齐编辑器），分析用 `toJsonText()`（压成紧凑 JSON）
 - 后端规则校验**不认尾随逗号**，而前端允许；若不做清洗，用户写了尾随逗号会被后端报成语法错误——属于前端特性与后端能力的落差，已在清洗层抹平
 - 未知规则名的检查实现在 Core（`ObjectAnalyzer.Core/Analysis/Rules/RulesLint.cs`，对规则原文做旁检查），API 与 CLI 共用。没有开 `JsonUnmappedMemberHandling.Disallow`（那会让含历史字段的旧规则文件直接加载失败），而是在**反序列化之前**先扫一遍原文拦下来

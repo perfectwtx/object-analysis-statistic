@@ -16,7 +16,8 @@ export const RULES_TEMPLATE = `{
     /* nullRateMax：字段缺失 + 显式 null 都会计入，超过 20% 就报违规 */
     "address.district": { "nullRateMax": 0.2 },
 
-    // transform.parse：先把字符串按 json / jwt / base64 / url 解开再统计，可多级串联
+    // transform：type 先做值转换（jwt / base64 / url / aes / sm4 / sm2），
+    // parse 再把结果按 JSON 展开为嵌套字段统计，可多级串联
     "line": { "transform": { "parse": "json" } },
     "line.body": { "transform": { "parse": "json" } }
   },
@@ -196,7 +197,8 @@ export default function RulesEditor({
         <summary>支持的规则字段</summary>
         <ul>
           <li><code>runtime.flatten</code>：是否扁平化嵌套对象（旧版为顶层 flatten，现已迁入 runtime）</li>
-          <li><code>transform.parse</code> 值转换：json / jwt / base64 / url，解析后展开统计（支持多级）</li>
+          <li><code>transform.type</code> 值转换：jwt / base64 / url / aes / sm4 / sm2</li>
+          <li><code>transform.parse</code> 转换结果按 JSON 展开统计（当前支持 json，支持多级）</li>
           <li><code>valueParsers</code> 字段级解析器：source / parseType / flatten / header</li>
           <li><code>enumValues</code> 枚举白名单</li>
           <li><code>minValue / maxValue</code> 数值范围</li>

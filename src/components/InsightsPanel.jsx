@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
+} from 'recharts';
 import { toSchemaSnapshot, diffSnapshots } from '../schemaDiff.js';
 import { download } from '../exporters.js';
 import { parseJsonc } from '../utils.js';
-import Sparkline from './Sparkline.jsx';
+import { useTheme, chartColors } from '../theme.js';
 
 /**
  * @param title   卡片标题
@@ -41,14 +44,70 @@ const TREND_LABEL = {
 
 const fmtDay = (s) => (s ? String(s).slice(0, 10) : '?');
 
+// 桶标签：取 from 的日期部分（年-月-日）；完整区间放在 tooltip
+const bucketLabel = (b) => (b && b.from ? String(b.from).slice(0, 10) : '');
+
+// 单字段时间序列面积图（recharts）。SVG 呈现属性不认 CSS 变量，颜色按主题从 CHART_COLORS 取。
+function TimeSeriesChart({ series, gradId }) {
+  const { theme } = useTheme();
+  const c = chartColors(theme);
+  if (!series || series.length === 0) return null;
+  const data = series.map((b) => ({
+    label: bucketLabel(b),
+    full: `${bucketLabel(b)} ~ ${b.to ? String(b.to).slice(0, 10) : '?'}`,
+    count: b.count ?? 0,
+    empty: (b.count ?? 0) === 0,
+  }));
+  const height = Math.max(170, 130 + Math.min(series.length, 24) * 4);
+  return (
+    <div className="ts-chart">
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={data} margin={{ top: 10, right: 14, bottom: 30, left: -6 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={c.barFrom} stopOpacity={0.55} />
+              <stop offset="100%" stopColor={c.barTo} stopOpacity={0.08} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
+          <XAxis
+            dataKey="label"
+            tickLine={false}
+            axisLine={{ stroke: c.axis }}
+            interval="preserveStartEnd"
+            angle={-30}
+            textAnchor="end"
+            fontSize={10}
+            minTickGap={18}
+          />
+          <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} width={28} />
+          <Tooltip
+            cursor={{ fill: c.cursor }}
+            formatter={(v, _n, p) => [`${v} 条${p?.payload?.empty ? '（空桶）' : ''}`, '计数']}
+            labelFormatter={(l, p) => p?.payload?.full || l}
+          />
+          <Area
+            type="monotone"
+            dataKey="count"
+            stroke={c.barTo}
+            strokeWidth={2}
+            fill={`url(#${gradId})`}
+            dot={{ r: 2, fill: c.barTo }}
+            activeDot={{ r: 4 }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function TimeSeriesCard({ fields, timeSeries, trendEnabled }) {
   if (fields.length === 0) {
     return (
       <InsightCard
         title="时间分布与趋势"
-        enabled={trendEnabled}
-        hint="在左侧「深度分析（P4）」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。"
-        empty="数据中未识别到日期时间字段"
+        enabled={false}
+        hint="数据中未识别到日期时间字段，无法生成时间分布。"
       />
     );
   }
@@ -57,18 +116,21 @@ function TimeSeriesCard({ fields, timeSeries, trendEnabled }) {
   return (
     <InsightCard
       title={`时间分布与趋势（${fields.length} 个时间字段）`}
-      enabled={trendEnabled}
-      hint="在左侧「深度分析（P4）」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。"
+      enabled
+      hint={null}
     >
-      {!hasTrend && (
+      {!trendEnabled && (
         <div className="strong-hint">
-          仅显示后端返回的日期分布直方图。勾选「时间序列」重新分析可得到趋势、突发度、空档等统计。
+          当前展示字段级日期分布直方图。勾选左侧「深度分析（P4）」的「时间序列」可叠加趋势、突发度、空档等统计。
         </div>
       )}
-      {fields.map((f) => {
+      {trendEnabled && !hasTrend && (
+        <div className="strong-hint">已开启「时间序列」，但本数据未产生时间序列趋势结果。</div>
+      )}
+      {fields.map((f, idx) => {
         const t = timeSeries?.[f.fieldName] || null;
         const series = t?.series?.length ? t.series : f.dateHistogram || [];
-        const peak = series.reduce((m, b) => Math.max(m, b.count), 0);
+        const peak = series.reduce((m, b) => Math.max(m, (b.count ?? 0)), 0);
         return (
           <div className="ts-row" key={f.fieldName}>
             <div className="ts-head">
@@ -82,7 +144,7 @@ function TimeSeriesCard({ fields, timeSeries, trendEnabled }) {
                 {fmtDay(t?.start ?? f.minDateTime)} → {fmtDay(t?.end ?? f.maxDateTime)}
               </span>
             </div>
-            <Sparkline data={series} width={300} height={36} />
+            <TimeSeriesChart series={series} gradId={`ts-grad-${idx}`} />
             <div className="ts-meta">
               <span className="chip">{series.length} 桶</span>
               <span className="chip">峰值 {peak}</span>

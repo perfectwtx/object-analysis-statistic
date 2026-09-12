@@ -27,21 +27,28 @@ const ICONS = {
 };
 
 export default function OverviewCards({ result }) {
+  // v2 响应带 overview 分节，直接用（异步路径由 adapter 从 result 推导，字段一致）
+  const ov = result.overview ?? {};
+  const fields = result.fieldStatistics ?? [];
+  const totalObjects = ov.totalObjects ?? result.totalObjects ?? 0;
+
+  // 覆盖率拆分汇总：把每个字段的 null 累加起来（后端 W8 起逐字段给出 nullCount）
+  const nullTotal = fields.reduce((s, f) => s + (f.nullCount ?? 0), 0);
+
+  // 有效值覆盖率 = 所有字段的有效值数 / 所有字段的记录数（即「字段-记录格」的有效占比）
+  const cells = fields.length * totalObjects;
+  const presentTotal = fields.reduce((s, f) => s + (f.presentCount ?? Math.max(0, f.count - (f.nullCount ?? 0))), 0);
+
   const cards = [
-    { label: '对象总数', value: result.totalObjects, icon: ICONS.objects },
-    { label: '唯一对象', value: result.totalUniqueObjects, icon: ICONS.unique },
-    { label: '重复对象组', value: result.totalDuplicateGroups, icon: ICONS.duplicate },
-    { label: '字段数', value: result.fieldStatistics.length, icon: ICONS.fields },
+    { label: '对象总数', value: totalObjects, icon: ICONS.objects },
+    { label: '唯一对象', value: ov.totalUniqueObjects ?? result.totalUniqueObjects, icon: ICONS.unique },
+    { label: '重复对象组', value: ov.totalDuplicateGroups ?? result.totalDuplicateGroups, icon: ICONS.duplicate },
+    { label: '字段数', value: ov.fieldCount ?? fields.length, icon: ICONS.fields },
     {
-      label: '平均覆盖率',
+      label: '有效值覆盖率',
       icon: ICONS.coverage,
-      value:
-        result.fieldStatistics.length === 0
-          ? '-'
-          : (
-              (result.fieldStatistics.reduce((s, f) => s + f.coverage, 0) /
-                result.fieldStatistics.length) * 100
-            ).toFixed(1) + '%',
+      value: cells > 0 ? ((presentTotal / cells) * 100).toFixed(1) + '%' : '-',
+      sub: `null ${nullTotal}`,
     },
   ];
   return (
@@ -50,7 +57,10 @@ export default function OverviewCards({ result }) {
         <div className="card" key={c.label}>
           <div className="card-icon">{c.icon}</div>
           <div className="card-value">{c.value}</div>
-          <div className="card-label">{c.label}</div>
+          <div className="card-label">
+            {c.label}
+            {c.sub && <span className="card-sub">{c.sub}</span>}
+          </div>
         </div>
       ))}
     </div>

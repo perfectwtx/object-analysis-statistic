@@ -1,4 +1,13 @@
-// ObjectAnalyzer Mini API 客户端
+// ObjectAnalyzer API v2 客户端
+//
+// v2 契约（后端 W8 重构）：
+//   同步  POST /analyze（multipart）、/analyze/config（JSON body）、/analyze/raw（请求体即数据）
+//         → AnalyzeViewResponse：{ fileName, format, rulesSource, overview, preview,
+//                                  fields, deepAnalysis, quality, result }
+//   异步  POST /analyze/async（multipart）、/analyze/async/config（JSON body）→ { jobId, status, … }
+//         GET  /analyze/async/{jobId}            → 作业快照（终态时 result + preview）
+//         GET  /analyze/async/{jobId}/events     → SSE 进度流（progress / complete / gone）
+//         POST /analyze/async/{jobId}/cancel     → 真实中止后台分析
 //
 // 默认走 Vite 开发服务器代理（/api → http://localhost:5200），前端无需感知端口与 CORS。
 // 若要直连后端（例如生产部署），设置环境变量 VITE_API_BASE=http://host:port/api
@@ -65,18 +74,61 @@ async function request(path, { method = 'GET', body, headers, signal, timeout = 
 /** 健康检查：返回 { status, version } */
 export const health = (opts) => request('/health', { timeout: 5000, ...opts });
 
+// ---------- 请求选项序列化 ----------
+//
+// 选项名必须与后端 AnalyzeRequestOptions 的属性名（camelCase）严格一致。
+// 早期版本用的 maxValues / maxParallel 后端根本没有对应属性，会被静默忽略，
+// 这里统一改为 maxValuesToShow / maxDegreeOfParallelism。
+function appendOptions(form, options = {}) {
+  const num = (v) => (v === undefined || v === null || v === '' ? null : String(v));
+  const append = (k, v) => { if (v !== null && v !== undefined && v !== '') form.append(k, String(v)); };
+  if (options.flatten !== undefined) form.append('flatten', String(options.flatten));
+  // CSV 数值推断：后端默认 true，这里显式传，保证 UI 上的开关和后端行为严格一致
+  if (options.csvInferNumbers !== undefined) form.append('csvInferNumbers', String(options.csvInferNumbers));
+  append('maxValuesToShow', num(options.maxValuesToShow ?? options.maxValues));
+  append('maxDegreeOfParallelism', num(options.maxDegreeOfParallelism ?? options.maxParallel));
+  append('fields', options.fields);
+  append('filter', options.filter);
+  append('rootPath', options.rootPath);
+  append('recordPath', options.recordPath);
+  append('sampleReservoir', num(options.sampleReservoir));
+  append('sampleStep', num(options.sampleStep));
+
+  // 深度分析开关：显式传 true/false，全 false 时后端走快速路径（不产生额外开销）
+  for (const [k, v] of Object.entries(options.features || {})) {
+    if (v !== undefined && v !== null) form.append(k, String(v));
+  }
+  return form;
+}
+
+/** 把分析选项写进查询串（/analyze/raw 用） */
+function putOptions(qs, options = {}) {
+  const put = (k, v) => { if (v !== undefined && v !== null && v !== '') qs.set(k, String(v)); };
+  put('flatten', options.flatten);
+  put('csvInferNumbers', options.csvInferNumbers);
+  put('maxValuesToShow', options.maxValuesToShow ?? options.maxValues);
+  put('maxDegreeOfParallelism', options.maxDegreeOfParallelism ?? options.maxParallel);
+  put('fields', options.fields);
+  put('filter', options.filter);
+  put('rootPath', options.rootPath);
+  put('recordPath', options.recordPath);
+  put('sampleReservoir', options.sampleReservoir);
+  put('sampleStep', options.sampleStep);
+  for (const [k, v] of Object.entries(options.features || {})) {
+    if (v !== undefined && v !== null) put(k, v);
+  }
+  return qs;
+}
+
 /**
- * 分析上传的数据文件。
+ * 分析上传的数据文件（同步，一次性拿到结果）。
  * @param {File} file 数据文件（json/jsonl/csv/xlsx/xml/yaml，支持 gz/zip）
  * @param {object} options
  *   rules      {File}   规则文件（与 rulesJson 二选一）
  *   rulesJson  {string} 内联规则 JSON 文本（优先）
- *   flatten, maxValues, fields, filter, rootPath, recordPath,
- *   sampleReservoir, sampleStep, maxParallel
- *   csvInferNumbers {boolean} CSV 里「看起来是数字」的字符串是否推断为数值（默认 true）。
- *     关掉则整列按 String 统计 —— 均值/标准差/分位数/相关性全部失效，只剩字符串指标。
- *     仅作用于 CSV：xlsx 单元格自带类型，JSON 的数字本来就是数字，都不需要推断。
- *   features：P4 深度分析开关 { enableCorrelation, enableStringPatterns,
+ *   flatten, csvInferNumbers, maxValuesToShow, maxDegreeOfParallelism,
+ *   fields, filter, rootPath, recordPath, sampleReservoir, sampleStep
+ *   features：深度分析开关 { enableCorrelation, enableStringPatterns,
  *             enableUnicodeHygiene, enableTimeSeries, enableDistributionSnapshot }
  */
 export function analyzeFile(file, options = {}) {
@@ -84,32 +136,15 @@ export function analyzeFile(file, options = {}) {
   form.append('file', file);
   if (options.rulesJson) form.append('rulesJson', options.rulesJson);
   else if (options.rules) form.append('rules', options.rules);
-
-  const num = (v) => (v === undefined || v === null || v === '' ? null : String(v));
-  const append = (k, v) => { if (v !== null && v !== undefined && v !== '') form.append(k, String(v)); };
-  if (options.flatten !== undefined) form.append('flatten', String(options.flatten));
-  // CSV 数值推断：后端默认 true，这里显式传，保证 UI 上的开关和后端行为严格一致
-  if (options.csvInferNumbers !== undefined) form.append('csvInferNumbers', String(options.csvInferNumbers));
-  append('maxValues', num(options.maxValues));
-  append('fields', options.fields);
-  append('filter', options.filter);
-  append('rootPath', options.rootPath);
-  append('recordPath', options.recordPath);
-  append('sampleReservoir', num(options.sampleReservoir));
-  append('sampleStep', num(options.sampleStep));
-  append('maxParallel', num(options.maxParallel));
-
-  // P4 深度分析开关：显式传 true/false，全 false 时后端走 v1.x 快速路径
-  for (const [k, v] of Object.entries(options.features || {})) {
-    if (v !== undefined && v !== null) form.append(k, String(v));
-  }
+  if (options.allowUnknownRules !== undefined) form.append('allowUnknownRules', String(options.allowUnknownRules));
+  appendOptions(form, options);
 
   // multipart 必须让浏览器自己设置 Content-Type（带 boundary）
   return request('/analyze', { method: 'POST', body: form, ...options.request });
 }
 
 /**
- * 分析请求体数据文本。
+ * 分析请求体数据文本（同步）。
  * @param {string} text 数据内容
  * @param {string} format json / jsonl / csv / excel / xml / yaml
  * @param {object} [options] 与 analyzeFile 同构，另支持：
@@ -121,22 +156,9 @@ export function analyzeFile(file, options = {}) {
 export function analyzeRaw(text, format, options = {}) {
   const qs = new URLSearchParams();
   qs.set('format', format);
-  const put = (k, v) => { if (v !== undefined && v !== null && v !== '') qs.set(k, String(v)); };
-  put('flatten', options.flatten);
-  if (options.csvInferNumbers !== undefined) put('csvInferNumbers', options.csvInferNumbers);
-  put('rulesJson', options.rulesJson);
-  put('allowUnknownRules', options.allowUnknownRules);
-  put('maxValues', options.maxValues);
-  put('fields', options.fields);
-  put('filter', options.filter);
-  put('rootPath', options.rootPath);
-  put('recordPath', options.recordPath);
-  put('sampleReservoir', options.sampleReservoir);
-  put('sampleStep', options.sampleStep);
-  put('maxParallel', options.maxParallel);
-  for (const [k, v] of Object.entries(options.features || {})) {
-    if (v !== undefined && v !== null) put(k, v);
-  }
+  putOptions(qs, options);
+  qs.set('rulesJson', options.rulesJson ?? '');
+  if (options.allowUnknownRules !== undefined) qs.set('allowUnknownRules', String(options.allowUnknownRules));
 
   return request(`/analyze/raw?${qs}`, {
     method: 'POST',
@@ -145,6 +167,193 @@ export function analyzeRaw(text, format, options = {}) {
     ...options.request,
   });
 }
+
+/**
+ * 强类型 JSON body 同步分析（数据文本内嵌 + 强类型 rules 对象）。
+ * 规则是对象而非文本，省去前端自己序列化，后端也能给出逐字段的校验错误。
+ */
+export function analyzeConfig({ dataText, format, rules, ...options }) {
+  const body = { dataText, format };
+  if (rules) body.rules = rules;
+  for (const [k, v] of Object.entries(options)) {
+    if (k === 'features') Object.assign(body, v);
+    else if (!['request', 'rulesJson', 'rules', 'allowUnknownRules'].includes(k)) body[k] = v;
+  }
+  if (options.rulesJson) body.rules = JSON.parse(options.rulesJson);
+
+  return request('/analyze/config', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    ...options.request,
+  });
+}
+
+// ---------- 异步分析 ----------
+//
+// 大文件分析可能跑很久，同步请求会因为代理/网关超时被掐断，也拿不到进度。
+// v2 提供作业式接口：提交立即返回 jobId → SSE 推送进度 → 终态后拉结果。
+// 另外 /cancel 能真正中止后台分析（同步接口 abort 只是断开连接，后端还在算）。
+
+/** 提交异步分析作业（multipart）。返回 { jobId, status, fileName, format, rulesSource, submittedAt } */
+export function submitAsyncJob(file, options = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  if (options.rulesJson) form.append('rulesJson', options.rulesJson);
+  else if (options.rules) form.append('rules', options.rules);
+  if (options.allowUnknownRules !== undefined) form.append('allowUnknownRules', String(options.allowUnknownRules));
+  appendOptions(form, options);
+
+  return request('/analyze/async', { method: 'POST', body: form, ...options.request });
+}
+
+/** 提交异步分析作业（JSON body，数据文本内嵌）。 */
+export function submitAsyncConfigJob({ dataText, format, rules, ...options }) {
+  const body = { dataText, format };
+  if (rules) body.rules = rules;
+  if (options.rulesJson) body.rules = JSON.parse(options.rulesJson);
+  for (const [k, v] of Object.entries(options)) {
+    if (k === 'features') Object.assign(body, v);
+    else if (!['request', 'rulesJson', 'rules', 'allowUnknownRules'].includes(k)) body[k] = v;
+  }
+
+  return request('/analyze/async/config', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+    ...options.request,
+  });
+}
+
+/**
+ * 查询作业快照。
+ * 终态（Completed）时含 result（完整 AnalysisResult）与 preview（样本行数组）；
+ * Failed 时含 error（"TypeName: message"）。
+ */
+export const getJob = (jobId, opts) => request(`/analyze/async/${encodeURIComponent(jobId)}`, { timeout: 30_000, ...opts });
+
+/** 取消作业。返回 { jobId, cancelled }；作业已终态时 cancelled=false。 */
+export const cancelJob = (jobId, opts) =>
+  request(`/analyze/async/${encodeURIComponent(jobId)}/cancel`, { method: 'POST', timeout: 10_000, ...opts });
+
+/**
+ * 订阅作业事件流（SSE）。
+ * @param {string} jobId
+ * @param {{onProgress?, onComplete?, onGone?, onError?}} handlers
+ *   事件负载：{ processedObjects, status, error? }
+ * @returns {EventSource} 调用方负责 close()
+ */
+export function openJobEvents(jobId, { onProgress, onComplete, onGone, onError } = {}) {
+  const url = `${getBaseUrl()}/analyze/async/${encodeURIComponent(jobId)}/events`;
+  const es = new EventSource(url);
+
+  const parse = (e) => {
+    try { return JSON.parse(e.data); } catch { return null; }
+  };
+  if (onProgress) es.addEventListener('progress', (e) => onProgress(parse(e)));
+  if (onComplete) es.addEventListener('complete', (e) => onComplete(parse(e)));
+  if (onGone) es.addEventListener('gone', (e) => onGone(parse(e)));
+  // EventSource 在流正常结束（服务端 return）时也会触发 error，由调用方判断是否已终态
+  if (onError) es.addEventListener('error', () => onError());
+  return es;
+}
+
+const TERMINAL = ['Completed', 'Failed', 'Cancelled'];
+
+/**
+ * 等待作业进入终态：优先 SSE，断流则降级为轮询。
+ * 终态为 Failed / Cancelled 时抛出对应错误。
+ */
+function waitForJob(jobId, { onProgress, isStopped, timeout }) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeout;
+    let settled = false;
+    let es = null;
+    let pollTimer = null;
+
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      if (es) es.close();
+      if (pollTimer) clearTimeout(pollTimer);
+      if (err) reject(err); else resolve();
+    };
+
+    const handle = (data) => {
+      if (!data) return;
+      onProgress?.(data);
+      if (!TERMINAL.includes(data.status)) return;
+      if (data.status === 'Failed') finish(new Error(data.error || '分析失败'));
+      else if (data.status === 'Cancelled') finish(new Error('已取消分析'));
+      else finish();
+    };
+
+    const poll = async () => {
+      if (settled) return;
+      if (isStopped?.()) return finish();            // 用户已取消，交给外层处理
+      if (Date.now() > deadline) return finish(new Error('分析超时'));
+      try {
+        handle(await getJob(jobId));
+      } catch (e) {
+        return finish(e);
+      }
+      if (!settled) pollTimer = setTimeout(poll, 800);
+    };
+
+    // SSE 不可用（老浏览器 / 代理掐断长连接）时静默降级为轮询，不打断分析
+    try {
+      es = openJobEvents(jobId, {
+        onProgress: handle,
+        onComplete: handle,
+        onGone: () => finish(new Error('作业不存在或已被清理（超过保留窗口）')),
+        onError: () => { if (es) { es.close(); es = null; } poll(); },
+      });
+    } catch {
+      poll();
+    }
+
+    pollTimer = setTimeout(() => {
+      if (!settled) finish(new Error('分析超时'));
+    }, timeout);
+  });
+}
+
+/**
+ * 提交异步分析并等待结果（推荐入口）。
+ *
+ * @param {File} file 数据文件
+ * @param {object} options 与 analyzeFile 同构
+ * @param {{onProgress?, signal?, timeout?}} [ctrl]
+ *   onProgress 收到 { processedObjects, status }
+ *   signal     AbortSignal —— abort 时会调用 /cancel 真正中止后端分析
+ * @returns {Promise<object>} 终态作业快照（含 result 与 preview）
+ */
+export async function runAsyncJob(file, options = {}, { onProgress, signal, timeout = DEFAULT_TIMEOUT } = {}) {
+  const submitted = await submitAsyncJob(file, options);
+  const jobId = submitted.jobId;
+
+  let cancelled = false;
+  const onCancel = () => {
+    cancelled = true;
+    // 同步接口 abort 只是断开连接，后端照算不误；这里显式通知后端停手
+    cancelJob(jobId).catch(() => {});
+  };
+  if (signal) {
+    if (signal.aborted) { onCancel(); throw new Error('已取消'); }
+    signal.addEventListener('abort', onCancel, { once: true });
+  }
+
+  try {
+    await waitForJob(jobId, { onProgress, isStopped: () => cancelled, timeout });
+  } finally {
+    if (signal) signal.removeEventListener('abort', onCancel);
+  }
+
+  if (cancelled) throw new Error('已取消分析');
+  return getJob(jobId);
+}
+
+// ---------- 规则 ----------
 
 /**
  * 规则校验（权威校验，走后端 /api/rules/validate）。

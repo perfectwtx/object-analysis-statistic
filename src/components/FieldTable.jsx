@@ -14,6 +14,37 @@ const RULE_KEY_LABELS = {
 
 const fmt = (v) => (v === null || v === undefined ? '-' : +v.toFixed(2));
 
+/**
+ * 覆盖率（后端 W8）：只展示两种组成，按记录总数叠加——
+ *   有效值率   = (count - nullCount) / total   （绿色段，真正参与统计的值）
+ *   值为 null 率 = nullCount / total           （红色段，字段在但值为 null）
+ * 两段相加 = 字段覆盖率（count/total）；剩余的空白即「字段不存在」的记录，
+ * 不再单独成段，避免与覆盖率概念混淆。
+ */
+function CoverageCell({ f, total }) {
+  const base = total || f.count || 0;
+  const pct = (n) => (base > 0 ? (n / base) * 100 : 0);
+  const present = f.presentCount ?? Math.max(0, f.count - (f.nullCount ?? 0));
+  const nullCount = f.nullCount ?? 0;
+
+  const validRate = pct(present);
+  const nullRate = pct(nullCount);
+
+  return (
+    <div
+      className="coverage-cell"
+      title={`覆盖率 ${(f.coverage * 100).toFixed(1)}%：有效值率 ${validRate.toFixed(1)}% · 值为 null 率 ${nullRate.toFixed(1)}%（共 ${base} 条记录，有效值 ${present}，值为 null ${nullCount}）`}
+    >
+      <div className="coverage-bar split">
+        <div className="seg-present" style={{ width: `${validRate}%` }} />
+        {nullCount > 0 && <div className="seg-null" style={{ width: `${nullRate}%` }} />}
+      </div>
+      <span className="cov-pct">{(f.coverage * 100).toFixed(1)}%</span>
+      {nullCount > 0 && <span className="cov-tag null">null {nullCount}</span>}
+    </div>
+  );
+}
+
 // 异常值边界：本地引擎给 [lower, upper]，后端给字符串 "[45, 55]"，这里统一成展示文本
 function fmtBounds(b) {
   if (Array.isArray(b)) {
@@ -23,7 +54,7 @@ function fmtBounds(b) {
   return '-';
 }
 
-export default function FieldTable({ fields, rules, bare }) {
+export default function FieldTable({ fields, rules, bare, totalObjects }) {
   const fieldRules = rules?.fields || {};
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('count');
@@ -99,12 +130,7 @@ export default function FieldTable({ fields, rules, bare }) {
                 </td>
                 <td>{f.semanticType ? <span className="badge semantic">{f.semanticType}</span> : '-'}</td>
                 <td>
-                  <div className="coverage-cell">
-                    <div className="coverage-bar">
-                      <div style={{ width: `${f.coverage * 100}%` }} />
-                    </div>
-                    {(f.coverage * 100).toFixed(1)}%
-                  </div>
+                  <CoverageCell f={f} total={totalObjects} />
                 </td>
                 <td><TypeBadge t={f.primaryType} /></td>
                 <td>{f.distinctCount}</td>

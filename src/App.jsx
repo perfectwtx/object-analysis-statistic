@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { download, toCsv, toHtml, toJson, toJsonSchema, toMarkdown } from './exporters.js';
-import { analyzeFile, fetchRulesReference, getBaseUrl, health, preflight, setBaseUrl, validateRules } from './api.js';
+import { analyzeFile, fetchRulesReference, getBaseUrl, health, preflight, runAsyncJob, setBaseUrl, validateRules } from './api.js';
 import { adaptAnalysisResponse } from './adapter.js';
 import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from './utils.js';
 import { SAMPLE_DATA } from './sampleData.js';
@@ -8,9 +8,11 @@ import OverviewCards from './components/OverviewCards.jsx';
 import CoverageChart from './components/CoverageChart.jsx';
 import TypeChart from './components/TypeChart.jsx';
 import FieldTable from './components/FieldTable.jsx';
+import PreviewTable from './components/PreviewTable.jsx';
 import ValueDistribution from './components/ValueDistribution.jsx';
 import RulesEditor, { RULES_TEMPLATE } from './components/RulesEditor.jsx';
 import FieldRulesModal from './components/FieldRulesModal.jsx';
+import PasteModal from './components/PasteModal.jsx';
 import QualityPanel from './components/QualityPanel.jsx';
 import InsightsPanel from './components/InsightsPanel.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -19,11 +21,15 @@ import ThemeSwitch from './components/ThemeSwitch.jsx';
 // 说明：所有统计均由 ObjectAnalyzer.Api（.NET）计算，浏览器端不做任何数据分析。
 
 const TABS = [
+  { key: 'preview', label: '数据预览' },
   { key: 'fields', label: '字段明细' },
   { key: 'insights', label: '深度分析' },
   { key: 'values', label: '取值分布' },
   { key: 'quality', label: '质量报告' },
 ];
+
+// 异步作业的等待上限：与后端 AnalysisJobRegistry 的 5 分钟保留窗口对齐
+const JOB_WAIT_TIMEOUT = 300_000;
 
 const EXPORT_FORMATS = [
   { key: 'json', label: 'JSON 报告', ext: 'json', mime: 'application/json', gen: (r) => toJson(r) },
@@ -34,9 +40,6 @@ const EXPORT_FORMATS = [
   { key: 'pdf', label: 'PDF 报告（打印）', ext: 'pdf' },
   { key: 'schema', label: 'JSON Schema', ext: 'schema.json', mime: 'application/json', gen: (r) => toJsonSchema(r) },
 ];
-
-// 「粘贴数据」时指定的文本格式；上传文件由后端按扩展名自动识别
-const TEXT_FORMATS = ['json', 'jsonl', 'csv', 'yaml', 'xml'];
 
 const EMPTY_INSIGHTS = {
   correlations: { fields: [], pairs: [], strongPairs: [] },
@@ -83,6 +86,8 @@ export default function App() {
   const [rulesCheck, setRulesCheck] = useState(null);
   const [tab, setTab] = useState('fields');
   const [textFormat, setTextFormat] = useState('json');
+  // 「粘贴数据」弹窗（格式选择与「格式化」都在弹窗里）
+  const [pasteOpen, setPasteOpen] = useState(false);
   const fileInput = useRef(null);
   // 分析请求的中止控制器与取消标记：busy 时提供「取消」按钮真实中止 fetch
   const abortRef = useRef(null);
@@ -93,6 +98,8 @@ export default function App() {
   const [apiState, setApiState] = useState({ status: 'unknown', version: null, error: null });
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  // 异步作业进度：{ processedObjects, status }，由 SSE 推送（断流时前端轮询兜底）
+  const [progress, setProgress] = useState(null);
   // 方案 B：预检命中「用错规则文件」时挂起的确认弹框与待执行分析参数
   const [preflightModal, setPreflightModal] = useState(null); // { ruleFields, sampleFields, truncated }
   // 字段规则可视化配置弹窗
@@ -180,6 +187,11 @@ export default function App() {
   // ---------- 分析（全部由后端执行） ----------
   // 实际发起分析请求。预检通过 / 无规则 / 无命中后都会走到这里；
   // 预检弹框「仍然继续分析」也是调用它（沿用挂起的 opts）。
+  //
+  // 走异步作业接口：提交即返回 jobId，进度由 SSE 推送，终态后拉结果。
+  // 相比同步 /api/analyze 有两个实打实的好处：
+  //   1. 大文件不会卡在代理/网关的超时上，中途还能看到已处理条数；
+  //   2. 取消会打到 /cancel 真正中止后端计算（同步接口 abort 只是断开连接，后端照算不误）。
   const executeAnalysis = useCallback(async (src, opts) => {
     if (!src?.file) return;
     const ctrl = new AbortController();
@@ -187,9 +199,22 @@ export default function App() {
     cancelledRef.current = false;
     setBusy(true);
     setError('');
+    setProgress({ processedObjects: 0, status: 'Running' });
     const t0 = performance.now();
     try {
-      const payload = await analyzeFile(src.file, { ...opts, request: { signal: ctrl.signal } });
+      let payload;
+      try {
+        payload = await runAsyncJob(src.file, opts, {
+          onProgress: setProgress,
+          signal: ctrl.signal,
+          timeout: JOB_WAIT_TIMEOUT,
+        });
+      } catch (e) {
+        // 后端仍是旧版（没有 /analyze/async）时退回同步接口，不至于整个用不了。
+        // 只认 HTTP 404 —— 其它错误（规则 400、解析失败等）照常抛给用户。
+        if (!/HTTP 404/.test(e.message)) throw e;
+        payload = await analyzeFile(src.file, { ...opts, request: { signal: ctrl.signal } });
+      }
       const adapted = adaptAnalysisResponse(payload);
       adapted._api.elapsedMs = Math.round(performance.now() - t0);
       adapted._api.bytes = src.file.size ?? null;
@@ -197,20 +222,20 @@ export default function App() {
       setElapsed(adapted._api.elapsedMs);
       setApiState((s) => (s.status === 'ok' ? s : { ...s, status: 'ok', error: null }));
     } catch (e) {
-      if (cancelledRef.current) setError('已取消分析');
+      if (cancelledRef.current || /已取消/.test(e.message)) setError('已取消分析');
       else setError(`分析失败：${e.message}`);
       setResult(null);
     } finally {
       if (abortRef.current === ctrl) abortRef.current = null;
       setBusy(false);
+      setProgress(null);
     }
   }, []);
 
-  // 分析进行中点击「取消」：中止底层 fetch，结束本轮请求（不抛错，由 catch 改提示）
+  // 分析进行中点击「取消」：中止底层 fetch（runAsyncJob 会连带调用 /cancel 让后端停手）
   const cancelAnalysis = () => {
     cancelledRef.current = true;
     abortRef.current?.abort();
-    setBusy(false);
   };
 
   // 分析入口：先做「方案 B」预检，规则字段与数据零重叠则弹确认框，用户确认后再真正分析。
@@ -378,17 +403,16 @@ export default function App() {
     await runAnalysis(src, rulesText);
   };
 
-  const onPaste = async () => {
-    const text = window.prompt('粘贴数据内容（JSON / JSONL / CSV / YAML / XML）：');
-    if (!text) return;
+  // 粘贴弹窗「确定」：按所选格式包装成文件提交，后缀决定后端的解析格式
+  const submitPaste = (text) => {
+    setPasteOpen(false);
     const name = `粘贴的数据（${textFormat}）`;
     setFileName(name);
     setError('');
-    // 包装成文件提交，后缀决定后端的解析格式
     const file = new File([text], `pasted.${textFormat}`, { type: 'text/plain' });
     const src = { file, name };
     setSource(src);
-    await runAnalysis(src, rulesText);
+    runAnalysis(src, rulesText);
   };
 
   const loadSample = async () => {
@@ -550,7 +574,7 @@ export default function App() {
               onChange={onFile}
             />
             <div className="btn-row">
-              <button className="btn half" onClick={onPaste} disabled={busy}>粘贴数据</button>
+              <button className="btn half" onClick={() => setPasteOpen(true)} disabled={busy}>粘贴数据</button>
               <button className="btn half" onClick={loadSample} disabled={busy}>加载样例</button>
             </div>
             <button
@@ -561,18 +585,6 @@ export default function App() {
             >
               重新分析
             </button>
-            <div className="format-row">
-              <label htmlFor="text-format">文本格式</label>
-              <select
-                id="text-format"
-                className="format-select"
-                value={textFormat}
-                onChange={(e) => setTextFormat(e.target.value)}
-                title="「粘贴数据」时使用；上传文件由后端按扩展名自动识别"
-              >
-                {TEXT_FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
           </div>
         </div>
 
@@ -639,7 +651,10 @@ export default function App() {
           <div className="topbar-status">
             {busy && (
               <span className="busy-indicator">
-                <span className="spinner" />分析中…
+                <span className="spinner" />
+                {progress?.processedObjects > 0
+                  ? `已处理 ${progress.processedObjects.toLocaleString()} 条…`
+                  : '提交中…'}
                 <button type="button" className="btn-link danger" onClick={cancelAnalysis}>取消</button>
               </span>
             )}
@@ -719,7 +734,15 @@ export default function App() {
               <div className="tab-content">
                 {/* 单个标签页渲染出错时只影响该标签页；key 保证切换标签会重置错误状态 */}
                 <ErrorBoundary key={tab}>
-                  {tab === 'fields' && <FieldTable fields={result.fieldStatistics} rules={rules} bare />}
+                  {tab === 'preview' && <PreviewTable preview={result.preview} bare />}
+                  {tab === 'fields' && (
+                    <FieldTable
+                      fields={result.fieldStatistics}
+                      rules={rules}
+                      totalObjects={result.totalObjects}
+                      bare
+                    />
+                  )}
                   {tab === 'insights' && deepInsights && (
                     <InsightsPanel
                       result={result}
@@ -748,6 +771,16 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* ---------- 粘贴数据弹窗 ---------- */}
+      <PasteModal
+        open={pasteOpen}
+        format={textFormat}
+        onFormatChange={setTextFormat}
+        busy={busy}
+        onClose={() => setPasteOpen(false)}
+        onSubmit={submitPaste}
+      />
 
       {/* ---------- 方案 B：用错规则文件预检确认框（分析前拦截） ---------- */}
       {preflightModal && (

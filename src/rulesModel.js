@@ -8,8 +8,8 @@
 //         "primaryType": "String",
 //         "defaultValue": "...",
 //         "enumValues": ["a", "b"],
-//         "transform": { "type": "json", "parse": "json" },
-//         "pii": { "label": "...", "mask": { "maskAll": true } },
+//         "transform": { "type": "jwt", "parse": "json" },
+//         "pii": { "label": "...", "highSeverity": true, "mask": { "maskAll": true } },
 //         "redact": true,
 //         "minValue": 0, "maxValue": 120,
 //         "required": true, "pattern": "\\S+@\\S+", "unique": true,
@@ -26,19 +26,24 @@
 
 import { parseJsonc } from './utils.js';
 
-export const TRANSFORM_TYPES = ['json', 'jwt', 'base64', 'url', 'aes', 'sm4', 'sm2'];
+// transform.type 合法值（FieldTransformProcessor 仅认这 6 种，传 json 会被后端判不支持；
+// "json" 是 transform.parse 的取值，两者不是一回事）
+export const TRANSFORM_TYPES = ['jwt', 'base64', 'url', 'aes', 'sm4', 'sm2'];
 export const PARSE_TYPES = ['json'];
+// 需要对称密钥的转换类型（key / iv / mode cbc|ecb / padding）；sm2 用单独的公私钥字段
+export const SYM_CRYPTO_TRANSFORM_TYPES = ['aes', 'sm4'];
+export const CRYPTO_TRANSFORM_TYPES = ['aes', 'sm4', 'sm2'];
 export const REDACT_OPTIONS = [
   { value: '', label: '自动（命中启发式才打码）' },
   { value: 'true', label: '强制打码' },
   { value: 'false', label: '不打码（白名单）' },
 ];
+// pii.mask 模式：后端 PiiMaskConfig 支持 maskAll / keepPrefix+keepSuffix / maskChar
 export const PII_MASK_OPTIONS = [
-  { value: 'maskAll', label: '全量打码' },
-  { value: 'keep', label: '保留前后各 2 位' },
+  { value: '', label: '未配置（用后端默认格式）' },
+  { value: 'maskAll', label: '全量打码（maskAll）' },
+  { value: 'custom', label: '自定义保留前后缀' },
 ];
-// 这些转换类型需要密钥类参数
-export const CRYPTO_TRANSFORM_TYPES = ['aes', 'sm4', 'sm2'];
 
 /** 把规则文本解析为对象；非法 JSONC 时抛错（调用方负责捕获并提示）。 */
 export function parseRulesText(text) {
@@ -104,7 +109,13 @@ export function ruleToDraft(rule) {
     maxOutlierRatio: rule.maxOutlierRatio ?? '',
     redact: rule.redact === true ? 'true' : rule.redact === false ? 'false' : '',
     piiLabel: pii.label ?? '',
-    piiMask: pii.mask?.maskAll ? 'maskAll' : (pii.mask?.keepPrefix != null ? 'keep' : ''),
+    // highSeverity 后端默认 true；'' 表示未显式配置
+    piiHigh: pii.highSeverity === true ? 'true' : pii.highSeverity === false ? 'false' : '',
+    // mask：maskAll 优先；否则只要有 mask 对象就按自定义保留前后缀处理
+    piiMask: pii.mask?.maskAll ? 'maskAll' : (pii.mask ? 'custom' : ''),
+    piiKeepPrefix: pii.mask?.keepPrefix ?? '',
+    piiKeepSuffix: pii.mask?.keepSuffix ?? '',
+    piiMaskChar: pii.mask?.maskChar ?? '',
     transformType: t.type ?? 'none',
     transformParse: t.parse ?? 'none',
     transformClaim: t.claim ?? '',
@@ -113,6 +124,10 @@ export function ruleToDraft(rule) {
     transformMode: t.mode ?? '',
     transformPadding: t.padding ?? '',
     transformFormat: t.format ?? '',
+    // sm2 专用（decrypt 用 privateKey；verify 用 publicKey + signature）
+    transformPrivateKey: t.privateKey ?? '',
+    transformPublicKey: t.publicKey ?? '',
+    transformSignature: t.signature ?? '',
   };
 }
 
@@ -135,11 +150,19 @@ export function draftToRule(d) {
   if (d.maxOutlierRatio !== '' && d.maxOutlierRatio != null) r.maxOutlierRatio = Number(d.maxOutlierRatio);
   if (d.redact === 'true') r.redact = true;
   else if (d.redact === 'false') r.redact = false;
-  if (d.piiLabel || d.piiMask) {
+  if (d.piiLabel || d.piiHigh || d.piiMask) {
     const piiOut = {};
     if (d.piiLabel) piiOut.label = d.piiLabel;
+    if (d.piiHigh === 'true') piiOut.highSeverity = true;
+    else if (d.piiHigh === 'false') piiOut.highSeverity = false;
     if (d.piiMask === 'maskAll') piiOut.mask = { maskAll: true };
-    else if (d.piiMask === 'keep') piiOut.mask = { keepPrefix: 2, keepSuffix: 2 };
+    else if (d.piiMask === 'custom') {
+      const mask = {};
+      if (d.piiKeepPrefix !== '' && d.piiKeepPrefix != null) mask.keepPrefix = Number(d.piiKeepPrefix);
+      if (d.piiKeepSuffix !== '' && d.piiKeepSuffix != null) mask.keepSuffix = Number(d.piiKeepSuffix);
+      if (d.piiMaskChar) mask.maskChar = d.piiMaskChar;
+      if (Object.keys(mask).length) piiOut.mask = mask;
+    }
     r.pii = piiOut;
   }
   const t = {};
@@ -151,6 +174,10 @@ export function draftToRule(d) {
   if (d.transformMode) t.mode = d.transformMode;
   if (d.transformPadding) t.padding = d.transformPadding;
   if (d.transformFormat) t.format = d.transformFormat;
+  // sm2 专用键（key/iv/padding 对 sm2 无意义，不写出）
+  if (d.transformPrivateKey) t.privateKey = d.transformPrivateKey;
+  if (d.transformPublicKey) t.publicKey = d.transformPublicKey;
+  if (d.transformSignature) t.signature = d.transformSignature;
   if (Object.keys(t).length) r.transform = t;
   return r;
 }
@@ -208,6 +235,7 @@ export const RUNTIME_GROUPS = [
       { k: 'flatten', label: '扁平化 flatten', type: 'tribool', help: '嵌套对象是否展平为点分隔字段；缺省 true' },
       { k: 'csvInferNumbers', label: 'CSV 数值推断 csvInferNumbers', type: 'tribool', help: 'CSV 列是否按内容推断为 Number；缺省 true' },
       { k: 'maxValuesToShow', label: '取值 Top N maxValuesToShow', type: 'number', help: '取值分布展示的最大取值数；缺省 5' },
+      { k: 'maxTrackedValues', label: '唯一值跟踪上限 maxTrackedValues', type: 'number', help: '每字段实际跟踪的唯一值上限，超出归入 [Other values]；缺省 1000' },
       { k: 'maxParallelism', label: '最大并行度 maxParallelism', type: 'number', help: '并行解析线程数；缺省 -1（自动）' },
       { k: 'allowUnknownRules', label: '允许未知规则 allowUnknownRules', type: 'tribool', help: '忽略规则里的未知键而不报错；缺省 false' },
       { k: 'selectedFields', label: '仅分析字段 selectedFields', type: 'csv', help: '逗号分隔的字段名白名单' },
@@ -240,7 +268,7 @@ export const RUNTIME_GROUPS = [
     fields: [
       { k: 'off', label: '关闭 PII 打码 pii.off', type: 'tribool', help: '完全关闭自动 PII 识别；缺省 false' },
       { k: 'report', label: 'PII 报告路径 pii.report', type: 'text', help: '合规报告输出位置' },
-      { k: 'failOnLevel', label: 'PII 门禁等级 pii.failOnLevel', type: 'text', help: '如 high / medium / low' },
+      { k: 'failOnLevel', label: 'PII 门禁等级 pii.failOnLevel', type: 'text', help: '合规等级 A / B / C，达到该等级即门禁失败；缺省不门禁' },
     ],
   },
   {
@@ -257,8 +285,8 @@ export const RUNTIME_GROUPS = [
   {
     section: 'memory', title: '内存预算 Memory',
     fields: [
-      { k: 'maxMB', label: '最大内存 MB maxMB', type: 'number', help: '0 = 不限制' },
-      { k: 'mode', label: '模式 mode', type: 'text', help: 'soft / strict' },
+      { k: 'maxMB', label: '最大内存 MB maxMB', type: 'number', help: '0 = 不监控' },
+      { k: 'mode', label: '模式 mode', type: 'text', help: 'soft（超限警告并自动降级采样）/ hard（超限立即失败）' },
     ],
   },
   {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CRYPTO_TRANSFORM_TYPES, EXPECTATIONS_FIELDS, PARSE_TYPES, PII_MASK_OPTIONS, RUNTIME_GROUPS,
-  REDACT_OPTIONS, TRANSFORM_TYPES, draftToValueParser, getFieldsMap, initGlobal,
-  mergeDraftsIntoRulesText, mergeFieldList, parseRulesText, ruleToDraft, serializeGlobal,
-  suggestDefaults, valueParserToDraft,
+  REDACT_OPTIONS, SYM_CRYPTO_TRANSFORM_TYPES, TRANSFORM_TYPES, draftToValueParser, getFieldsMap,
+  initGlobal, mergeDraftsIntoRulesText, mergeFieldList, parseRulesText, ruleToDraft,
+  serializeGlobal, suggestDefaults, valueParserToDraft,
 } from '../rulesModel.js';
 
 const VP_KEY = '__valueParsers__';
@@ -187,8 +187,10 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
   const suggest = selStat ? suggestDefaults(selStat) : null;
   const isRemoved = sel ? removed.has(sel) : false;
 
-  // 小控件
-  const TextField = ({ label, k, placeholder, title }) => (
+  // 小控件：必须以普通函数调用（{textField({…})}）而不是 JSX（<textField /> / <TextField />）。
+  // 它们定义在组件内部，每次渲染都是新的函数身份；一旦写成 JSX，React 会视为「组件类型变了」，
+  // 每次按键重渲染都把输入框卸载重建，表现为输入一个字符就丢焦点。
+  const textField = ({ label, k, placeholder, title }) => (
     <label className="fr-field">
       <span className="fr-label">{label}</span>
       <input
@@ -200,7 +202,7 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
       />
     </label>
   );
-  const NumberField = ({ label, k, step, min, max, title }) => (
+  const numberField = ({ label, k, step, min, max, title }) => (
     <label className="fr-field">
       <span className="fr-label">{label}</span>
       <input
@@ -216,7 +218,7 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
       />
     </label>
   );
-  const BoolField = ({ label, k, title }) => (
+  const boolField = ({ label, k, title }) => (
     <label className="fr-check">
       <input
         type="checkbox"
@@ -485,8 +487,8 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                 <div className="fr-group">
                   <div className="fr-group-title">基础</div>
                   <div className="fr-grid">
-                    <TextField label="主导类型 primaryType" k="primaryType" title="覆盖后端自动推断的类型，如 String / Number / Boolean" />
-                    <TextField label="默认值 defaultValue" k="defaultValue" title="为缺失/空值指定默认值" />
+                    {textField({ label: '主导类型 primaryType', k: 'primaryType', title: '覆盖后端自动推断的类型，如 String / Number / Boolean' })}
+                    {textField({ label: '默认值 defaultValue', k: 'defaultValue', title: '为缺失/空值指定默认值' })}
                   </div>
                 </div>
 
@@ -499,7 +501,22 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                       <select
                         className="fr-input"
                         value={draft.transformType}
-                        onChange={(e) => patchDraft(sel, { transformType: e.target.value })}
+                        onChange={(e) => {
+                          const t = e.target.value;
+                          // 切换家族时清掉另一族的参数：mode 在两族里语义不同
+                          // （对称 = cbc/ecb，sm2 = decrypt/verify），混写会被后端判不支持
+                          const patch = { transformType: t, transformMode: '' };
+                          if (t === 'sm2') {
+                            patch.transformKey = '';
+                            patch.transformIv = '';
+                            patch.transformPadding = '';
+                          } else {
+                            patch.transformPrivateKey = '';
+                            patch.transformPublicKey = '';
+                            patch.transformSignature = '';
+                          }
+                          patchDraft(sel, patch);
+                        }}
                       >
                         <option value="none">（无）</option>
                         {TRANSFORM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -520,12 +537,12 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                   {draft.transformType && draft.transformType !== 'none' && (
                     <div className="fr-grid">
                       {draft.transformType === 'jwt' && (
-                        <TextField label="claim（提取的字段）" k="transformClaim" placeholder="如 sub / user_id；留空取整个 payload" />
+                        textField({ label: 'claim（提取的字段）', k: 'transformClaim', placeholder: '如 sub / user_id；留空取整个 payload' })
                       )}
-                      {CRYPTO_TRANSFORM_TYPES.includes(draft.transformType) && (
+                      {SYM_CRYPTO_TRANSFORM_TYPES.includes(draft.transformType) && (
                         <>
-                          <TextField label="key" k="transformKey" title="密钥（编码由 format 决定）" />
-                          <TextField label="iv" k="transformIv" title="初始化向量（ECB 模式可留空）" />
+                          {textField({ label: 'key', k: 'transformKey', title: '密钥（编码由 format 决定）' })}
+                          {textField({ label: 'iv', k: 'transformIv', title: '初始化向量（ECB 模式可留空）' })}
                           <label className="fr-field">
                             <span className="fr-label">mode</span>
                             <select className="fr-input" value={draft.transformMode} onChange={(e) => patchDraft(sel, { transformMode: e.target.value })}>
@@ -542,15 +559,31 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                               <option value="none">none</option>
                             </select>
                           </label>
+                        </>
+                      )}
+                      {draft.transformType === 'sm2' && (
+                        <>
                           <label className="fr-field">
-                            <span className="fr-label">format</span>
-                            <select className="fr-input" value={draft.transformFormat} onChange={(e) => patchDraft(sel, { transformFormat: e.target.value })}>
-                              <option value="">（默认 base64）</option>
-                              <option value="base64">base64</option>
-                              <option value="hex">hex</option>
+                            <span className="fr-label">mode</span>
+                            <select className="fr-input" value={draft.transformMode} onChange={(e) => patchDraft(sel, { transformMode: e.target.value })}>
+                              <option value="decrypt">decrypt（私钥解密）</option>
+                              <option value="verify">verify（公钥验签）</option>
                             </select>
                           </label>
+                          {textField({ label: '私钥 privateKey', k: 'transformPrivateKey', title: 'decrypt 模式必填：Base64 PKCS#8 或 hex 编码的 32 字节私钥' })}
+                          {textField({ label: '公钥 publicKey', k: 'transformPublicKey', title: 'verify 模式必填：Base64 X.509 或 hex 未压缩点' })}
+                          {textField({ label: '签名 signature', k: 'transformSignature', title: 'verify 模式必填：与 format 编码一致的待验签名' })}
                         </>
+                      )}
+                      {CRYPTO_TRANSFORM_TYPES.includes(draft.transformType) && (
+                        <label className="fr-field">
+                          <span className="fr-label">format</span>
+                          <select className="fr-input" value={draft.transformFormat} onChange={(e) => patchDraft(sel, { transformFormat: e.target.value })}>
+                            <option value="">（默认 base64）</option>
+                            <option value="base64">base64</option>
+                            <option value="hex">hex</option>
+                          </select>
+                        </label>
                       )}
                     </div>
                   )}
@@ -560,8 +593,8 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                 <div className="fr-group">
                   <div className="fr-group-title">质量检查</div>
                   <div className="fr-checks">
-                    <BoolField label="必填 required" k="required" title="字段缺失或为 null 均计为违规" />
-                    <BoolField label="唯一 unique" k="unique" title="非空值重复时报告重复次数" />
+                    {boolField({ label: '必填 required', k: 'required', title: '字段缺失或为 null 均计为违规' })}
+                    {boolField({ label: '唯一 unique', k: 'unique', title: '非空值重复时报告重复次数' })}
                   </div>
                   <label className="fr-field fr-block">
                     <span className="fr-label">枚举白名单 enumValues（每行 / 逗号分隔）</span>
@@ -574,11 +607,11 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                     />
                   </label>
                   <div className="fr-grid">
-                    <TextField label="正则 pattern" k="pattern" title="非空值的字符串形态需整体匹配" />
-                    <NumberField label="数值下界 minValue" k="minValue" step="any" />
-                    <NumberField label="数值上界 maxValue" k="maxValue" step="any" />
-                    <NumberField label="Null 率上限 nullRateMax" k="nullRateMax" step="0.01" min={0} max={1} />
-                    <NumberField label="异常值占比上限 maxOutlierRatio" k="maxOutlierRatio" step="0.01" min={0} max={1} />
+                    {textField({ label: '正则 pattern', k: 'pattern', title: '非空值的字符串形态需整体匹配' })}
+                    {numberField({ label: '数值下界 minValue', k: 'minValue', step: 'any' })}
+                    {numberField({ label: '数值上界 maxValue', k: 'maxValue', step: 'any' })}
+                    {numberField({ label: 'Null 率上限 nullRateMax', k: 'nullRateMax', step: '0.01', min: 0, max: 1 })}
+                    {numberField({ label: '异常值占比上限 maxOutlierRatio', k: 'maxOutlierRatio', step: '0.01', min: 0, max: 1 })}
                   </div>
                 </div>
 
@@ -596,7 +629,20 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                         {REDACT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
-                    <TextField label="pii 标签 label" k="piiLabel" title="合规报告展示用的敏感分类名" />
+                    {textField({ label: 'pii 标签 label', k: 'piiLabel', title: '合规报告展示用的敏感分类名' })}
+                    <label className="fr-field">
+                      <span className="fr-label">高敏感 highSeverity</span>
+                      <select
+                        className="fr-input"
+                        value={draft.piiHigh}
+                        onChange={(e) => patchDraft(sel, { piiHigh: e.target.value })}
+                        title="影响合规报告排序与 A/B/C 合规等级判定；缺省为高敏感"
+                      >
+                        <option value="">（默认 高敏感）</option>
+                        <option value="true">true（高敏感）</option>
+                        <option value="false">false（普通敏感）</option>
+                      </select>
+                    </label>
                     <label className="fr-field">
                       <span className="fr-label">pii 打码方式 mask</span>
                       <select
@@ -607,6 +653,13 @@ export default function FieldRulesModal({ open, source, inputFormat, fields, rul
                         {PII_MASK_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </label>
+                    {draft.piiMask === 'custom' && (
+                      <>
+                        {numberField({ label: '保留前缀 keepPrefix', k: 'piiKeepPrefix', min: 0, title: '保留前 N 位明文；0 = 不保留' })}
+                        {numberField({ label: '保留后缀 keepSuffix', k: 'piiKeepSuffix', min: 0, title: '保留后 N 位明文；0 = 不保留' })}
+                        {textField({ label: '打码字符 maskChar', k: 'piiMaskChar', placeholder: '默认 *', title: '填充用字符' })}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

@@ -381,23 +381,40 @@ export function formatRulesError(msg) {
 
 // ---------- 图表 X 轴标签布局 ----------
 //
-// 字段名旋转后向下伸出高度 ≈ 字符宽 × 字符数 × sin(角度)。固定留白要么裁掉长名字，
+// 字段名旋转后向下伸出高度 ≈ 文本像素宽 × sin(角度)。固定留白要么裁掉长名字，
 // 要么浪费空间，所以按最长标签动态算留白，并同步增高图表，保证绘图区不被压扁。
 
 export const CHART_ANGLE = -35;   // 小于 -40° 更省垂直空间
-export const MAX_LABEL = 28;      // 超过则截断，完整名仍在 tooltip 里
-const CHAR_W = 6.2;               // 11px 字号下每字符的近似宽度
+export const MAX_LABEL = 60;      // 超过才截断（绝大多数带层级的点分路径都能完整显示）
+
+/** 11px 字号下单字符近似宽度：CJK 等全角字符 ≈ 字号本身，其余按 0.55 倍字号 */
+function charWidth(ch) {
+  return ch.charCodeAt(0) > 0x2e80 ? 11 : 6.2;
+}
 
 export function shortenLabel(name, max = MAX_LABEL) {
   const s = String(name ?? '');
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
-/** @returns {{ bottom: number, height: number, angle: number }} */
+/** X 轴刻度只显示字段路径的最后一个节点（如 order.items[0].skuName → skuName），完整名在 tooltip 里 */
+export function leafLabel(name) {
+  const s = String(name ?? '');
+  const i = s.lastIndexOf('.');
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+
+/** @returns {{ bottom: number, left: number, height: number, angle: number }} */
 export function labelLayout(names) {
-  const maxLabel = Math.max(1, ...names.map((n) => shortenLabel(n).length));
+  const maxW = Math.max(
+    1,
+    ...[...names].map((n) => [...shortenLabel(n)].reduce((w, ch) => w + charWidth(ch), 0)),
+  );
   const rad = (Math.abs(CHART_ANGLE) * Math.PI) / 180;
-  const bottom = Math.min(Math.round(26 + maxLabel * CHAR_W * Math.sin(rad)), 150);
+  // 截断上限 60 字符 ≈ 372px 文本宽，-35° 下纵向需要 ≈240px，上限 250 保证最长名字不被裁；
+  // 最左侧刻度的名字还会向左伸出 maxW·cos(角度)，左边距一并补上（上限 200 保护绘图区）
+  const bottom = Math.min(Math.round(26 + maxW * Math.sin(rad)), 250);
+  const left = Math.min(Math.round(Math.max(8, maxW * Math.cos(rad) - 15)), 200);
   const height = 300 + Math.max(0, bottom - 64);
-  return { bottom, height, angle: CHART_ANGLE };
+  return { bottom, left, height, angle: CHART_ANGLE };
 }
