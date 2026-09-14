@@ -1,0 +1,102 @@
+/* 追加到 src/styles.css 末尾 */
+
+.job-progress {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius, 8px);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+}
+
+.job-async-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.job-async-toggle input {
+  margin: 0;
+}
+
+.job-async-hint {
+  color: var(--muted, #888);
+  font-size: 12px;
+}
+
+.job-progress-body {
+  margin-top: 8px;
+}
+
+.job-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.job-status-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.job-status-text.error,
+.job-progress.error .job-status-text {
+  color: var(--danger, #e55);
+}
+
+.job-status-text.cancelled {
+  color: var(--muted, #888);
+}
+
+.job-progress-track {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border, rgba(127, 127, 127, 0.25));
+  overflow: hidden;
+}
+
+.job-progress-indeterminate {
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent, #4c8bf5);
+  animation: job-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes job-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.job-id-row {
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.job-id-row .muted {
+  color: var(--muted, #888);
+}
+
+.job-error-detail {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--danger, #e55);
+  word-break: break-word;
+}
+
+/* 分析中禁用输入区 */
+.sidebar.is-analyzing .side-section:not(.job-section) {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.sidebar.is-analyzing .job-section {
+  pointer-events: auto;
+  opacity: 1;
+}
