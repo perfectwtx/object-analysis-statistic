@@ -5,8 +5,8 @@ import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { applyTheme } from './theme.js';
 import './styles.css';
 import './job-progress.css';
+import './styles/dashboard.css';
 
-// index.html 的内联脚本已经设过 data-theme，这里补一次 color-scheme（原生控件跟随）
 applyTheme();
 
 createRoot(document.getElementById('root')).render(
@@ -14,5 +14,5 @@ createRoot(document.getElementById('root')).render(
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
