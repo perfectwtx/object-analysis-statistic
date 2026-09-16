@@ -19,6 +19,9 @@
 .app-topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 20px; border-bottom: 1px solid var(--border, rgba(127,127,127,.2)); }
 .topbar-api { display: flex; gap: 8px; align-items: center; flex: 1; max-width: 480px; }
 .app-content { flex: 1; overflow: auto; padding: 20px 24px 40px; }
+.app-content:has(.workbench.wb-embedded) { padding: 0; overflow: hidden; }
+.workbench.wb-embedded { min-height: calc(100vh - 56px); height: calc(100vh - 56px); }
+.workbench.wb-embedded .sidebar { max-height: 100%; overflow-y: auto; }
 .page { max-width: 1200px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .page-title { font-size: 22px; font-weight: 600; margin: 0; }
@@ -53,4 +56,5 @@
   .app-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border, rgba(127,127,127,.25)); }
   .app-nav { display: flex; flex-wrap: wrap; gap: 4px; }
   .nav-group-label { display: none; }
+  .workbench.wb-embedded { height: auto; min-height: 70vh; }
 }
