@@ -18,10 +18,10 @@ import {
   subscribeAnalyzeEvents,
   pollAnalyzeJob,
   ASYNC_THRESHOLD_BYTES,
-} from '../api.js';
+  saveLastJobId,
+} from '../api/index.js';
 import { adaptAnalysisResponse } from '../adapter.js';
 
-/** 后端状态字符串归一化 */
 function isRunning(status) {
   return String(status || '').toLowerCase() === 'running';
 }
@@ -270,6 +270,7 @@ export function useAsyncAnalyze() {
         if (!id) throw new Error('后端未返回 jobId');
         jobIdRef.current = id;
         setJobId(id);
+        saveLastJobId(id);
         setPhase('running');
         setProgress({
           processedObjects: 0,
