@@ -1,96 +1,105 @@
-/* 追加到 src/styles.css 末尾 */
+/* 异步作业进度 — 与统一控件高度对齐 */
 
 .job-progress {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: var(--radius, 8px);
-  background: var(--surface-2, rgba(127, 127, 127, 0.08));
-  border: 1px solid var(--border, rgba(127, 127, 127, 0.2));
+  margin-top: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--panel-border);
 }
 
 .job-async-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
   cursor: pointer;
   user-select: none;
+  padding: 4px 0;
 }
 
 .job-async-toggle input {
+  width: 15px;
+  height: 15px;
   margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
 }
 
 .job-async-hint {
-  color: var(--muted, #888);
-  font-size: 12px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 400;
 }
 
 .job-progress-body {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .job-progress-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
 }
 
 .job-status-text {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
 }
 
 .job-status-text.error,
 .job-progress.error .job-status-text {
-  color: var(--danger, #e55);
+  color: var(--err);
 }
 
 .job-status-text.cancelled {
-  color: var(--muted, #888);
+  color: var(--text-dim);
 }
 
 .job-progress-track {
-  margin-top: 8px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border, rgba(127, 127, 127, 0.25));
+  margin-top: 10px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--track);
   overflow: hidden;
 }
 
 .job-progress-indeterminate {
   height: 100%;
-  width: 40%;
-  border-radius: 2px;
-  background: var(--accent, #4c8bf5);
-  animation: job-indeterminate 1.2s ease-in-out infinite;
+  width: 38%;
+  border-radius: 999px;
+  background: var(--gradient);
+  animation: job-indeterminate 1.15s ease-in-out infinite;
 }
 
 @keyframes job-indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
 }
 
 .job-id-row {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 11.5px;
 }
 
 .job-id-row .muted {
-  color: var(--muted, #888);
+  color: var(--text-dim);
 }
 
 .job-error-detail {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--danger, #e55);
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--err);
   word-break: break-word;
+  line-height: 1.45;
 }
 
-/* 分析中禁用输入区 */
 .sidebar.is-analyzing .side-section:not(.job-section) {
   opacity: 0.72;
   pointer-events: none;
