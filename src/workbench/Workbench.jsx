@@ -329,8 +329,11 @@ export default function Workbench() {
       </aside>
       <div className="resize-handle" onMouseDown={onResizeStart} title="拖拽调整宽度" />
       <main className="main">
-        <div className="topbar">
-          <div><h1>分析概览</h1><p className="subtitle">由 ObjectAnalyzer.Api 执行分析</p></div>
+        <div className="topbar wb-page-header">
+          <div>
+            <h1>分析</h1>
+            <p className="subtitle">上传或粘贴数据，由 API 计算统计与质量指标</p>
+          </div>
           <div className="topbar-status">
             {busy && (
               <span className="busy-indicator">
@@ -386,7 +389,23 @@ export default function Workbench() {
             </div>
           </>
         )}
-        {!result && !busy && <div className="empty-state">选择数据并开始分析</div>}
+        {!result && !busy && (
+          <div className="wb-empty">
+            <div className="wb-empty-icon" aria-hidden>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <path d="M4 19V5M4 19h16M8 15l3.2-4.5 2.8 2.2L18 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="wb-empty-title">开始一次分析</div>
+            <p className="wb-empty-desc">
+              在左侧选择数据源：上传文件、粘贴文本，或加载内置样例。大文件可勾选「后台分析」查看进度。
+            </p>
+            <div className="wb-empty-hints">
+              <span>JSON / JSONL / CSV / YAML / XML / Excel</span>
+              <span>支持规则校验与预检</span>
+            </div>
+          </div>
+        )}
       </main>
       {preflightModal && (
         <div className="modal-mask">
