@@ -6,6 +6,7 @@ import { applyTheme } from './theme.js';
 import './styles.css';
 import './job-progress.css';
 import './styles/dashboard.css';
+import './styles/workbench-align.css';
 
 applyTheme();
 
