@@ -1,0 +1,179 @@
+/* ========== 工作台与产品页对齐 ========== */
+/*
+  首页 Workbench 原先是「独立控制台」观感：密侧栏 + uppercase 分区。
+  嵌入 product-shell 后，用卡片化工具区 + 与 .page 一致的标题/空状态。
+*/
+
+.workbench.wb-embedded {
+  background: transparent;
+  min-height: 100%;
+}
+
+.workbench.wb-embedded .sidebar {
+  height: 100%;
+  max-height: 100%;
+  position: relative;
+  top: auto;
+  padding: 16px 14px 20px;
+  gap: 12px;
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  border-right: 1px solid var(--panel-border);
+  backdrop-filter: blur(12px);
+}
+
+.workbench.wb-embedded .side-section {
+  gap: 10px;
+  padding: 12px 12px 14px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow-card);
+}
+
+.workbench.wb-embedded .side-section.job-section {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workbench.wb-embedded .side-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+
+.workbench.wb-embedded .source-current {
+  border-radius: 11px;
+  min-height: 36px;
+}
+
+.workbench.wb-embedded .resize-handle {
+  height: 100%;
+  position: relative;
+  top: auto;
+  width: 5px;
+  margin-left: -2px;
+  opacity: 0.35;
+}
+.workbench.wb-embedded .resize-handle:hover,
+body.col-resizing .workbench.wb-embedded .resize-handle {
+  opacity: 1;
+}
+
+.workbench.wb-embedded .main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px 48px;
+  background: transparent;
+}
+
+.workbench.wb-embedded .wb-page-header,
+.workbench.wb-embedded .topbar {
+  margin-bottom: 24px;
+  align-items: flex-start;
+}
+
+.workbench.wb-embedded .topbar h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  background: linear-gradient(120deg, var(--heading-from), var(--heading-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.workbench.wb-embedded .subtitle {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  max-width: 36em;
+}
+
+.workbench.wb-embedded .topbar-status {
+  gap: 8px;
+}
+
+.workbench.wb-embedded .charts {
+  gap: 14px;
+}
+
+.workbench.wb-embedded .panel {
+  border-radius: 16px;
+}
+
+.wb-empty {
+  margin-top: 12px;
+  padding: 56px 32px;
+  text-align: center;
+  border-radius: 20px;
+  border: 1px dashed var(--panel-border);
+  background: var(--surface-2);
+  max-width: 520px;
+}
+.wb-empty-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 16px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+}
+.wb-empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.wb-empty-desc {
+  margin: 0 auto 16px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 36em;
+}
+.wb-empty-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.wb-empty-hints span {
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  color: var(--text-dim);
+}
+
+.workbench.wb-embedded .cards {
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 900px) {
+  .workbench.wb-embedded {
+    flex-direction: column;
+  }
+  .workbench.wb-embedded .sidebar {
+    width: 100% !important;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .workbench.wb-embedded .resize-handle {
+    display: none;
+  }
+  .workbench.wb-embedded .main {
+    padding: 20px 16px 40px;
+  }
+}
