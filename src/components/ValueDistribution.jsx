@@ -1,12 +1,14 @@
+import { useT } from '../lib/i18n.js';
 const TOP_N = 8;
 
 export default function ValueDistribution({ fields, bare }) {
+  const { t } = useT();
   const list = (fields || []).filter((f) => Object.keys(f.valueCounts || {}).length > 0);
 
   if (list.length === 0) {
     return (
       <div className={bare ? '' : 'rounded-xl bg-card p-4 shadow-[var(--elev)]'}>
-        <div className="py-8 text-center text-sm text-muted-foreground">后端未返回取值分布。</div>
+        <div className="py-8 text-center text-sm text-muted-foreground">{t('valueDistEmpty')}</div>
       </div>
     );
   }
@@ -14,8 +16,8 @@ export default function ValueDistribution({ fields, bare }) {
   return (
     <div className={bare ? '' : 'rounded-xl bg-card p-4 shadow-[var(--elev)]'}>
       <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-sm font-medium">取值分布（每字段 Top {TOP_N}）</h3>
-        <span className="text-xs text-muted-foreground">{list.length} 个字段有统计</span>
+        <h3 className="text-sm font-medium">{t('valueDistTitle')}（{t('valueDistPerField')} {TOP_N}）</h3>
+        <span className="text-xs text-muted-foreground">{list.length} {t('valueDistStats')}</span>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {list.map((f) => {
@@ -34,13 +36,13 @@ export default function ValueDistribution({ fields, bare }) {
                   {f.primaryType}
                 </span>
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  唯一 {distinct}
+                  {t('distinct')} {distinct}
                 </span>
                 <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                   n={f.count}
                 </span>
                 {f.valueCountsTruncated ? (
-                  <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] text-warn">已截断</span>
+                  <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] text-warn">{t('truncated')}</span>
                 ) : null}
               </div>
               <div className="space-y-1.5">
@@ -48,7 +50,7 @@ export default function ValueDistribution({ fields, bare }) {
                   <div key={v} className="grid grid-cols-[1fr_auto_auto] items-center gap-2 text-xs">
                     <div className="min-w-0">
                       <div className="truncate font-mono text-muted-foreground" title={v}>
-                        {v === '' ? '(空字符串)' : v}
+                        {v === '' ? t('emptyString') : v}
                       </div>
                       <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
                         <div
