@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 import Sparkline from './Sparkline.jsx';
+import {
+  TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
+} from './ui/data-table.jsx';
 
 const PAGE = 20;
 const RULE_KEY_LABELS = {
@@ -28,7 +31,7 @@ function fmtBounds(b) {
 function TypeBadge({ t }) {
   if (!t) return <span className="text-muted-foreground">—</span>;
   return (
-    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+    <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
       {t}
     </span>
   );
@@ -37,7 +40,6 @@ function TypeBadge({ t }) {
 export default function FieldTable({ fields = [], rules, bare }) {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
-
   const fieldRules = rules?.fields || {};
 
   const filtered = useMemo(() => {
@@ -50,8 +52,8 @@ export default function FieldTable({ fields = [], rules, bare }) {
   const cur = Math.min(page, pages - 1);
   const rows = filtered.slice(cur * PAGE, cur * PAGE + PAGE);
 
-  return (
-    <div className={bare ? '' : 'rounded-xl bg-card p-4 shadow-[var(--elev)]'}>
+  const table = (
+    <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={q}
@@ -64,27 +66,30 @@ export default function FieldTable({ fields = [], rules, bare }) {
         />
         <span className="text-xs text-muted-foreground">{filtered.length} 个字段</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
-              <th className="px-3 py-2.5 font-medium">字段</th>
-              <th className="px-3 py-2.5 font-medium">语义</th>
-              <th className="px-3 py-2.5 font-medium min-w-[120px]">覆盖率</th>
-              <th className="px-3 py-2.5 font-medium">类型</th>
-              <th className="px-3 py-2.5 font-medium">唯一</th>
-              <th className="px-3 py-2.5 font-medium">计数</th>
-              <th className="px-3 py-2.5 font-medium">默认值</th>
-              <th className="px-3 py-2.5 font-medium">分布</th>
-              <th className="px-3 py-2.5 font-medium">规则</th>
-              <th className="px-3 py-2.5 font-medium">高频值</th>
+
+      <TableShell maxHeight="min(60vh, 520px)">
+        <Table dense className="min-w-[960px]">
+          <THead sticky>
+            <tr>
+              <TH sticky className="min-w-[9rem]">字段</TH>
+              <TH>语义</TH>
+              <TH className="min-w-[7.5rem]">覆盖率</TH>
+              <TH>类型</TH>
+              <TH align="right">唯一</TH>
+              <TH align="right">计数</TH>
+              <TH>默认值</TH>
+              <TH>分布</TH>
+              <TH>规则</TH>
+              <TH>高频值</TH>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {rows.map((f) => (
-              <tr key={f.fieldName} className="border-b border-border/70 last:border-0 align-top">
-                <td className="px-3 py-2.5">
-                  <div className="font-mono text-xs">{f.fieldName}</div>
+              <TR key={f.fieldName}>
+                <TD sticky mono className="bg-card group-hover:bg-muted/30">
+                  <div className="max-w-[11rem] truncate" title={f.fieldName}>
+                    {f.fieldName}
+                  </div>
                   {f.outlierCount > 0 ? (
                     <span
                       className="mt-1 inline-block rounded bg-warn/15 px-1.5 py-0.5 text-[10px] text-warn"
@@ -93,39 +98,43 @@ export default function FieldTable({ fields = [], rules, bare }) {
                       异常×{f.outlierCount}
                     </span>
                   ) : null}
-                </td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                </TD>
+                <TD muted className="whitespace-nowrap text-xs">
                   {f.semanticType || '—'}
-                </td>
-                <td className="px-3 py-2.5">
+                </TD>
+                <TD>
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                    <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-ok"
                         style={{ width: `${Math.min(100, (f.coverage ?? 0) * 100)}%` }}
                       />
                     </div>
-                    <span className="tabular-nums text-xs">
+                    <span className="w-12 text-right tabular-nums text-xs">
                       {((f.coverage ?? 0) * 100).toFixed(1)}%
                     </span>
                   </div>
-                </td>
-                <td className="px-3 py-2.5">
+                </TD>
+                <TD>
                   <TypeBadge t={f.primaryType} />
-                </td>
-                <td className="px-3 py-2.5 tabular-nums text-xs">{f.distinctCount ?? '—'}</td>
-                <td className="px-3 py-2.5 tabular-nums text-xs">{f.count ?? '—'}</td>
-                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
+                </TD>
+                <TD align="right" className="text-xs">
+                  {f.distinctCount ?? '—'}
+                </TD>
+                <TD align="right" className="text-xs">
+                  {f.count ?? '—'}
+                </TD>
+                <TD mono muted className="max-w-[6rem] truncate" title={f.defaultValue ?? ''}>
                   {f.defaultValue ?? '—'}
-                </td>
-                <td className="px-3 py-2.5">
+                </TD>
+                <TD>
                   {f.histogram || f.dateHistogram ? (
                     <Sparkline data={f.histogram || f.dateHistogram} />
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
-                </td>
-                <td className="px-3 py-2.5">
+                </TD>
+                <TD>
                   {fieldRules[f.fieldName] ? (
                     <div className="flex flex-wrap gap-1">
                       {[
@@ -144,36 +153,31 @@ export default function FieldTable({ fields = [], rules, bare }) {
                       ))}
                     </div>
                   ) : (
-                    '—'
+                    <span className="text-muted-foreground">—</span>
                   )}
-                </td>
-                <td className="px-3 py-2.5">
-                  <div className="flex max-w-[180px] flex-wrap gap-1">
+                </TD>
+                <TD>
+                  <div className="flex max-w-[11rem] flex-wrap gap-1">
                     {Object.entries(f.valueCounts || {})
                       .slice(0, 3)
                       .map(([v, c]) => (
                         <span
                           key={v}
-                          className="truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                          className="max-w-[7rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
                           title={`${v} × ${c}`}
                         >
                           {(v.length > 10 ? `${v.slice(0, 10)}…` : v) || '(空)'} ×{c}
                         </span>
                       ))}
                   </div>
-                </td>
-              </tr>
+                </TD>
+              </TR>
             ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground">
-                  无匹配字段
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            {rows.length === 0 ? <EmptyRow colSpan={10}>无匹配字段</EmptyRow> : null}
+          </TBody>
+        </Table>
+      </TableShell>
+
       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
         <button
           type="button"
@@ -183,8 +187,10 @@ export default function FieldTable({ fields = [], rules, bare }) {
         >
           上一页
         </button>
-        <span>
-          {cur + 1} / {pages}（共 {filtered.length}）
+        <span className="tabular-nums">
+          {cur + 1} / {pages}
+          <span className="mx-1 text-border">·</span>
+          共 {filtered.length}
         </span>
         <button
           type="button"
@@ -195,6 +201,9 @@ export default function FieldTable({ fields = [], rules, bare }) {
           下一页
         </button>
       </div>
-    </div>
+    </>
   );
+
+  if (bare) return <div>{table}</div>;
+  return <div className="rounded-xl bg-card p-4 shadow-[var(--elev)]">{table}</div>;
 }
