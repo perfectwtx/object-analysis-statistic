@@ -271,6 +271,7 @@ export function useAsyncAnalyze() {
         jobIdRef.current = id;
         setJobId(id);
         saveLastJobId(id);
+        try { import('../lib/store.js').then((m) => m.usePlatform.getState().refresh()); } catch { /* ignore */ }
         setPhase('running');
         setProgress({
           processedObjects: 0,
