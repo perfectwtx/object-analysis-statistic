@@ -1,68 +1,48 @@
-import { useEffect, useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { getQualityTrend, listQualitySnapshots } from '../api/index.js';
-import PageHeader from '../components/ui/PageHeader.jsx';
-import LoadingBlock from '../components/ui/LoadingBlock.jsx';
-import ErrorBanner from '../components/ui/ErrorBanner.jsx';
-import ApiUnavailable from '../components/ui/ApiUnavailable.jsx';
-import EmptyState from '../components/ui/EmptyState.jsx';
+import { useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
+import { BackendStatus } from '../components/BackendStatus.jsx';
+import { Button } from '../components/ui/button.jsx';
+import { Card, CardHint, CardTitle } from '../components/ui/card.jsx';
+import { usePlatform } from '../lib/store.js';
+import { cn, formatNumber } from '../lib/cn.js';
 
 export default function QualityTrend() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [unavailable, setUnavailable] = useState(false);
-  const [points, setPoints] = useState([]);
-
-  const load = async () => {
-    setLoading(true); setError('');
-    try {
-      let res = await getQualityTrend({ limit: 50 });
-      if (res.unavailable) res = await listQualitySnapshots({ limit: 50 });
-      if (res.unavailable) { setUnavailable(true); setPoints([]); }
-      else {
-        setUnavailable(false);
-        const raw = Array.isArray(res.data) ? res.data : res.data?.points || res.data?.items || [];
-        setPoints(raw.map((p, i) => ({
-          label: (p.capturedAtUtc || p.date || `#${i + 1}`).toString().slice(0, 16),
-          overall: p.overallScore ?? p.qualityScore ?? null,
-          completeness: p.completeness ?? null,
-          validity: p.validity ?? null,
-          uniqueness: p.uniqueness ?? null,
-          consistency: p.consistency ?? null,
-          anomaly: p.anomalyControl ?? null,
-        })));
-      }
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
-  const hasData = useMemo(() => points.some((p) => p.overall != null), [points]);
-  if (loading) return <LoadingBlock label="加载质量趋势…" />;
+  const trend = usePlatform((s) => s.trend);
+  const source = usePlatform((s) => s.source);
+  const loading = usePlatform((s) => s.loading);
+  const refresh = usePlatform((s) => s.refresh);
+  useEffect(() => { refresh(); }, [refresh]);
+  const last = trend[trend.length - 1];
+  const first = trend[0];
+  const delta = last && first && last.score != null && first.score != null ? last.score - first.score : null;
 
   return (
-    <div className="page">
-      <PageHeader title="质量趋势" subtitle="综合分与五维质量" actions={<button type="button" className="btn" onClick={load}>刷新</button>} />
-      <ErrorBanner message={error} onRetry={load} />
-      {unavailable && <ApiUnavailable feature="质量趋势" endpoint="GET /api/quality/trend" />}
-      {!unavailable && !hasData && <EmptyState title="暂无趋势数据" />}
-      {!unavailable && hasData && (
-        <div className="panel chart-panel">
-          <ResponsiveContainer width="100%" height={360}>
-            <LineChart data={points}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis domain={[0, 100]} />
-              <Tooltip /><Legend />
-              <Line type="monotone" dataKey="overall" name="综合分" stroke="#4c8bf5" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="completeness" name="完整性" stroke="#22c55e" dot={false} />
-              <Line type="monotone" dataKey="validity" name="有效性" stroke="#a855f7" dot={false} />
-              <Line type="monotone" dataKey="uniqueness" name="唯一性" stroke="#f59e0b" dot={false} />
-              <Line type="monotone" dataKey="consistency" name="一致性" stroke="#06b6d4" dot={false} />
-              <Line type="monotone" dataKey="anomaly" name="异常控制" stroke="#ef4444" dot={false} />
-            </LineChart>
+    <div>
+      <PageHeader title="质量趋势" subtitle={source === 'api' ? '后端质量分时间序列。' : '演示趋势 · 对接 /api/quality/trend。'}
+        actions={<><BackendStatus /><Button variant="secondary" size="sm" onClick={() => refresh()} disabled={loading}><RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />刷新</Button></>} />
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl bg-card px-4 py-3 shadow-[var(--elev)]"><div className="text-xs text-muted-foreground">最新分数</div><div className="mt-1 text-lg font-medium tabular-nums">{last?.score != null ? formatNumber(last.score, 1) : '—'}</div></div>
+        <div className="rounded-xl bg-card px-4 py-3 shadow-[var(--elev)]"><div className="text-xs text-muted-foreground">区间变化</div><div className="mt-1 text-lg font-medium tabular-nums">{delta == null ? '—' : `${delta >= 0 ? '+' : ''}${formatNumber(delta, 1)}`}</div></div>
+        <div className="rounded-xl bg-card px-4 py-3 shadow-[var(--elev)]"><div className="text-xs text-muted-foreground">采样点数</div><div className="mt-1 text-lg font-medium tabular-nums">{trend.length}</div></div>
+      </div>
+      <Card className="p-4 sm:p-6">
+        <CardTitle>综合分走势</CardTitle>
+        <CardHint>近 30 天（或后端返回的时间窗）</CardHint>
+        <div className="mt-6 h-72 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={trend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <defs><linearGradient id="scoreFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--ok)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--ok)" stopOpacity={0} /></linearGradient></defs>
+              <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="day" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={24} />
+              <YAxis domain={[60, 100]} tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} tickLine={false} axisLine={false} width={36} />
+              <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, fontSize: 12 }} />
+              <Area type="monotone" dataKey="score" stroke="var(--ok)" fill="url(#scoreFill)" strokeWidth={2} dot={false} />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
-      )}
+      </Card>
     </div>
   );
 }
