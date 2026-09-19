@@ -5,6 +5,7 @@ import { Button } from '../ui/button.jsx';
 import { PRIMARY_NAV, SEARCH_TARGETS, activeSection } from '../../lib/nav.js';
 import { usePlatform } from '../../lib/store.js';
 import { cn } from '../../lib/cn.js';
+import { BackendStatus } from '../BackendStatus.jsx';
 
 export function TopNav() {
   const { pathname } = useLocation();
@@ -100,6 +101,7 @@ export function TopNav() {
           ) : null}
         </div>
 
+        <BackendStatus className="hidden sm:inline-flex" />
         <Button
           variant="ghost"
           size="icon"
