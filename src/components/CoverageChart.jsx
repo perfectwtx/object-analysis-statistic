@@ -5,10 +5,8 @@ import { labelLayout, shortenLabel } from '../utils.js';
 import { chartColors, useTheme } from '../theme.js';
 
 export default function CoverageChart({ fields }) {
-  // recharts 的 stroke / stopColor 是 SVG 呈现属性，写 var(--x) 不会被解析，只能在 JS 里按主题取色
   const { theme } = useTheme();
   const c = chartColors(theme);
-
   const top = (fields || []).slice(0, 20);
   if (top.length === 0) return null;
 
@@ -19,10 +17,10 @@ export default function CoverageChart({ fields }) {
   const { bottom, height, angle } = labelLayout(data.map((d) => d.name));
 
   return (
-    <div className="panel">
-      <h3>字段覆盖率（Top 20）</h3>
+    <div>
+      <h3 className="mb-2 text-xs font-medium text-muted-foreground">字段覆盖率（Top 20）</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 16, bottom, left: 8 }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: 0 }}>
           <defs>
             <linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={c.barFrom} />
@@ -39,12 +37,27 @@ export default function CoverageChart({ fields }) {
             tickLine={false}
             tickFormatter={shortenLabel}
             axisLine={{ stroke: c.axis }}
+            tick={{ fill: 'var(--muted-foreground)' }}
           />
-          <YAxis unit="%" domain={[0, 100]} fontSize={12} tickLine={false} axisLine={false} />
+          <YAxis
+            unit="%"
+            domain={[0, 100]}
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+            width={36}
+            tick={{ fill: 'var(--muted-foreground)' }}
+          />
           <Tooltip
-            formatter={(v) => v + '%'}
+            formatter={(v) => `${v}%`}
             labelFormatter={(v) => `字段 ${v}`}
             cursor={{ fill: c.cursor }}
+            contentStyle={{
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              fontSize: 12,
+            }}
           />
           <Bar dataKey="覆盖率" fill="url(#covGrad)" radius={[6, 6, 0, 0]} maxBarSize={36} />
         </BarChart>
