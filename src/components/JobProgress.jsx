@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n.js';
 /**
  * 分析进度条
  * phase: idle | submitting | running | done | error | cancelled
@@ -14,6 +15,7 @@ export default function JobProgress({
   showAsyncToggle = false,
   fileSize = 0,
 }) {
+  const { t } = useT();
   const busy = phase === 'submitting' || phase === 'running';
   const show = busy || phase === 'error' || phase === 'cancelled';
   if (!show && phase === 'idle') {
@@ -27,7 +29,7 @@ export default function JobProgress({
               checked={forceAsync}
               onChange={(e) => onForceAsyncChange?.(e.target.checked)}
             />
-            强制后台分析
+            {t('forceAsync')}
             {fileSize > 0 ? <span>（{(fileSize / 1024).toFixed(0)} KB）</span> : null}
           </label>
         ) : null}
@@ -37,15 +39,15 @@ export default function JobProgress({
   if (!show) return null;
 
   let statusLabel = '';
-  if (phase === 'submitting') statusLabel = '提交作业中…';
+  if (phase === 'submitting') statusLabel = t('submitting');
   else if (phase === 'running') {
     const n = progress.processedObjects;
     statusLabel =
-      n > 0 ? `分析中 · ${Number(n).toLocaleString()} 条` : '分析中…';
+      n > 0 ? `${t('analyzing')} · ${Number(n).toLocaleString()}` : t('analyzing');
     if (progress.progressText) statusLabel = progress.progressText;
-  } else if (phase === 'cancelled') statusLabel = '已取消';
-  else if (phase === 'error') statusLabel = error || '分析失败';
-  else if (phase === 'done') statusLabel = '完成';
+  } else if (phase === 'cancelled') statusLabel = t('cancelled');
+  else if (phase === 'error') statusLabel = error || t('analyzeFailed');
+  else if (phase === 'done') statusLabel = t('done');
 
   const pct =
     progress.percent != null
@@ -79,7 +81,7 @@ export default function JobProgress({
               className="text-xs text-danger hover:underline"
               onClick={onCancel}
             >
-              取消
+              {t('cancel')}
             </button>
           ) : null}
           {(phase === 'error' || phase === 'cancelled') && onRetry ? (
@@ -88,7 +90,7 @@ export default function JobProgress({
               className="text-xs text-primary hover:underline"
               onClick={onRetry}
             >
-              重试
+              {t('retry')}
             </button>
           ) : null}
         </div>
