@@ -65,3 +65,9 @@ html.light {
   }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
+
+/* Data tables: sticky header shadow when scrolling */
+.dt-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent) transparent;
+}
