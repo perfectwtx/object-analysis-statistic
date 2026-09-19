@@ -10,16 +10,23 @@
     <script>
       (function () {
         try {
-          var mode = localStorage.getItem('themeMode');
-          if (mode !== 'light' && mode !== 'dark') mode = 'system';
-          var dark = mode === 'dark'
-            || (mode === 'system' && window.matchMedia
-                && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          var theme = dark ? 'dark' : 'light';
+          var mode = localStorage.getItem('themeMode') || localStorage.getItem('oa-theme');
+          var theme;
+          if (mode === 'light' || mode === 'dark' || mode === 'eyecare') {
+            theme = mode;
+          } else {
+            var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            theme = dark ? 'dark' : 'light';
+          }
           document.documentElement.dataset.theme = theme;
-          document.documentElement.style.colorScheme = theme;
+          document.documentElement.classList.add(theme);
+          document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+          var loc = localStorage.getItem('oa-locale');
+          if (loc === 'en') document.documentElement.lang = 'en';
+          else document.documentElement.lang = 'zh-CN';
         } catch (e) {
           document.documentElement.dataset.theme = 'dark';
+          document.documentElement.classList.add('dark');
         }
       })();
     </script>

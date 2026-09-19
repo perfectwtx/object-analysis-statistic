@@ -19,7 +19,9 @@
   --color-track: var(--track);
 }
 
-:root {
+:root,
+html.dark,
+[data-theme='dark'] {
   --background: #0c0d0f;
   --foreground: #ecece8;
   --muted: #16171a;
@@ -37,7 +39,8 @@
   --elev: 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
-html.light {
+html.light,
+[data-theme='light'] {
   --background: #f3f2ee;
   --foreground: #1c1d1a;
   --muted: #e7e6e1;
@@ -55,6 +58,25 @@ html.light {
   --elev: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06);
 }
 
+html.eyecare,
+[data-theme='eyecare'] {
+  --background: #e8eedf;
+  --foreground: #2c3328;
+  --muted: #dce4d2;
+  --muted-foreground: #5c6654;
+  --card: #f0f4e8;
+  --card-foreground: #2c3328;
+  --border: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --primary: #3d4a36;
+  --primary-foreground: #e8eedf;
+  --ring: #5a6b50;
+  --ok: #3f6b46;
+  --warn: #8a6b2a;
+  --danger: #8a4a42;
+  --track: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --elev: 0 0 0 1px rgba(60, 70, 50, 0.08), 0 1px 2px -1px rgba(60, 70, 50, 0.06);
+}
+
 @layer base {
   html { -webkit-font-smoothing: antialiased; }
   body {
@@ -66,7 +88,6 @@ html.light {
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
 
-/* Data tables: sticky header shadow when scrolling */
 .dt-scroll {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in oklab, var(--foreground) 25%, transparent) transparent;
