@@ -1,7 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { TopNav } from '../components/layout/TopNav.jsx';
-import { hydrateTheme, usePlatform } from '../lib/store.js';
+import { hydrateTheme, hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
 
 export default function AppShell() {
@@ -11,6 +11,7 @@ export default function AppShell() {
 
   useEffect(() => {
     hydrateTheme();
+    hydrateLocale();
     refresh();
   }, [refresh]);
 

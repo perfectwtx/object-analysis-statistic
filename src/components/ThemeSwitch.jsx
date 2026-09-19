@@ -1,49 +1,88 @@
+import { Leaf, Monitor, Moon, Sun } from 'lucide-react';
 import { THEME_MODES, useTheme } from '../theme.js';
+import { usePlatform } from '../lib/store.js';
+import { t } from '../lib/i18n.js';
+import { cn } from '../lib/cn.js';
 
-// 24×24、stroke 用 currentColor，颜色由 .theme-opt 的文字色决定
 const ICONS = {
-  system: (
-    <>
-      <rect x="2" y="3" width="20" height="14" rx="2" />
-      <path d="M8 21h8M12 17v4" />
-    </>
-  ),
-  light: (
-    <>
-      <circle cx="12" cy="12" r="4.2" />
-      <path d="M12 1.8v2M12 20.2v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M1.8 12h2M20.2 12h2M4.6 19.4L6 18M18 6l1.4-1.4" />
-    </>
-  ),
-  dark: (
-    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-  ),
+  system: Monitor,
+  light: Sun,
+  dark: Moon,
+  eyecare: Leaf,
 };
 
-/**
- * 三档主题切换：跟随系统 / 浅色 / 深色。
- * 选择存 localStorage，跟随系统时还会监听系统偏好变化。
- */
-export default function ThemeSwitch() {
+export default function ThemeSwitch({ compact = false }) {
   const { mode, setMode, theme } = useTheme();
+  const locale = usePlatform((s) => s.locale);
+  const setStoreTheme = usePlatform((s) => s.setTheme);
 
   return (
-    <div className="theme-switch" role="group" aria-label="主题">
-      {THEME_MODES.map((m) => (
+    <div
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[var(--elev)]',
+        compact && 'p-0.5',
+      )}
+      role="group"
+      aria-label={t(locale, 'theme')}
+    >
+      {THEME_MODES.map((m) => {
+        const Icon = ICONS[m.key] || Monitor;
+        const active = mode === m.key;
+        const label = t(locale, m.labelKey);
+        return (
+          <button
+            key={m.key}
+            type="button"
+            className={cn(
+              'inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs transition-colors',
+              active
+                ? 'bg-card text-foreground shadow-[var(--elev)]'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={active}
+            title={
+              m.key === 'system'
+                ? `${label} (${theme === 'dark' ? t(locale, 'themeDark') : t(locale, 'themeLight')})`
+                : label
+            }
+            onClick={() => { setMode(m.key); setStoreTheme(m.key); }}
+          >
+            <Icon className="size-3.5 shrink-0" />
+            {!compact ? <span className="hidden sm:inline">{label}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function LocaleSwitch() {
+  const locale = usePlatform((s) => s.locale);
+  const setLocale = usePlatform((s) => s.setLocale);
+
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5 shadow-[var(--elev)]"
+      role="group"
+      aria-label={t(locale, 'language')}
+    >
+      {[
+        { key: 'zh', label: '中' },
+        { key: 'en', label: 'EN' },
+      ].map((m) => (
         <button
           key={m.key}
           type="button"
-          className={`theme-opt ${mode === m.key ? 'active' : ''}`}
-          aria-pressed={mode === m.key}
-          title={m.key === 'system' ? `跟随系统（当前${theme === 'dark' ? '深色' : '浅色'}）` : m.label}
-          onClick={() => setMode(m.key)}
+          className={cn(
+            'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+            locale === m.key
+              ? 'bg-card text-foreground shadow-[var(--elev)]'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+          aria-pressed={locale === m.key}
+          onClick={() => setLocale(m.key)}
         >
-          <svg
-            viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-          >
-            {ICONS[m.key]}
-          </svg>
-          <span>{m.label}</span>
+          {m.label}
         </button>
       ))}
     </div>
