@@ -58,3 +58,13 @@ export async function tryRequest(path, opts) {
     throw e;
   }
 }
+
+/** 探测后端是否可达 */
+export async function checkHealth(opts = {}) {
+  try {
+    const data = await request('/health', { timeout: 5_000, ...opts });
+    return { ok: true, data };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
