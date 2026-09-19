@@ -3,8 +3,10 @@ import {
 } from 'recharts';
 import { labelLayout, shortenLabel } from '../utils.js';
 import { chartColors, useTheme } from '../theme.js';
+import { useT } from '../lib/i18n.js';
 
 export default function CoverageChart({ fields }) {
+  const { t } = useT();
   const { theme } = useTheme();
   const c = chartColors(theme);
   const top = (fields || []).slice(0, 20);
@@ -18,7 +20,7 @@ export default function CoverageChart({ fields }) {
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-medium text-muted-foreground">字段覆盖率（Top 20）</h3>
+      <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('coverageChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: 0 }}>
           <defs>
@@ -50,7 +52,7 @@ export default function CoverageChart({ fields }) {
           />
           <Tooltip
             formatter={(v) => `${v}%`}
-            labelFormatter={(v) => `字段 ${v}`}
+            labelFormatter={(v) => v}
             cursor={{ fill: c.cursor }}
             contentStyle={{
               background: 'var(--card)',

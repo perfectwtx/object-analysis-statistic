@@ -3,8 +3,10 @@ import {
 } from 'recharts';
 import { labelLayout, shortenLabel } from '../utils.js';
 import { chartColors, useTheme } from '../theme.js';
+import { useT } from '../lib/i18n.js';
 
 export default function TypeChart({ fields }) {
+  const { t } = useT();
   const { theme } = useTheme();
   const c = chartColors(theme);
   const TYPE_COLORS = c.types || {};
@@ -18,7 +20,7 @@ export default function TypeChart({ fields }) {
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-medium text-muted-foreground">类型分布（Top 20）</h3>
+      <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('typeChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
@@ -44,12 +46,12 @@ export default function TypeChart({ fields }) {
             }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          {types.map((t, i) => (
+          {types.map((typeKey, i) => (
             <Bar
-              key={t}
-              dataKey={t}
+              key={typeKey}
+              dataKey={typeKey}
               stackId="a"
-              fill={TYPE_COLORS[t] || `hsl(${(i * 47) % 360} 60% 55%)`}
+              fill={TYPE_COLORS[typeKey] || `hsl(${(i * 47) % 360} 60% 55%)`}
               maxBarSize={36}
             />
           ))}
