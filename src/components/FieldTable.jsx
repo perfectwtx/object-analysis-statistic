@@ -3,6 +3,7 @@ import Sparkline from './Sparkline.jsx';
 import {
   TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
 } from './ui/data-table.jsx';
+import { useT } from '../lib/i18n.js';
 
 const PAGE = 20;
 const RULE_KEY_LABELS = {
@@ -28,16 +29,17 @@ function fmtBounds(b) {
   return String(b);
 }
 
-function TypeBadge({ t }) {
-  if (!t) return <span className="text-muted-foreground">—</span>;
+function TypeBadge({ type }) {
+  if (!type) return <span className="text-muted-foreground">—</span>;
   return (
     <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-      {t}
+      {type}
     </span>
   );
 }
 
 export default function FieldTable({ fields = [], rules, bare }) {
+  const { t } = useT();
   const [q, setQ] = useState('');
   const [page, setPage] = useState(0);
   const fieldRules = rules?.fields || {};
@@ -61,26 +63,26 @@ export default function FieldTable({ fields = [], rules, bare }) {
             setQ(e.target.value);
             setPage(0);
           }}
-          placeholder="筛选字段…"
+          placeholder={t('filterFields')}
           className="h-9 w-full max-w-xs rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] outline-none placeholder:text-muted-foreground"
         />
-        <span className="text-xs text-muted-foreground">{filtered.length} 个字段</span>
+        <span className="text-xs text-muted-foreground">{filtered.length} {t('fieldsCount')}</span>
       </div>
 
       <TableShell maxHeight="min(60vh, 520px)">
         <Table dense className="min-w-[960px]">
           <THead sticky>
             <tr>
-              <TH sticky className="min-w-[9rem]">字段</TH>
-              <TH>语义</TH>
-              <TH className="min-w-[7.5rem]">覆盖率</TH>
-              <TH>类型</TH>
-              <TH align="right">唯一</TH>
-              <TH align="right">计数</TH>
-              <TH>默认值</TH>
-              <TH>分布</TH>
-              <TH>规则</TH>
-              <TH>高频值</TH>
+              <TH sticky className="min-w-[9rem]">{t('field')}</TH>
+              <TH>{t('semantic')}</TH>
+              <TH className="min-w-[7.5rem]">{t('coverage')}</TH>
+              <TH>{t('primaryType')}</TH>
+              <TH align="right">{t('distinct')}</TH>
+              <TH align="right">{t('count')}</TH>
+              <TH>{t('defaultValue')}</TH>
+              <TH>{t('distribution')}</TH>
+              <TH>{t('rules')}</TH>
+              <TH>{t('topValues')}</TH>
             </tr>
           </THead>
           <TBody>
@@ -93,9 +95,9 @@ export default function FieldTable({ fields = [], rules, bare }) {
                   {f.outlierCount > 0 ? (
                     <span
                       className="mt-1 inline-block rounded bg-warn/15 px-1.5 py-0.5 text-[10px] text-warn"
-                      title={`${f.outlierMethod || 'IQR'} 异常 ${f.outlierCount} · 边界 [${fmtBounds(f.outlierBounds)}]`}
+                      title={`${f.outlierMethod || 'IQR'} outliers ${f.outlierCount}`}
                     >
-                      异常×{f.outlierCount}
+                      ×{f.outlierCount}
                     </span>
                   ) : null}
                 </TD>
@@ -116,7 +118,7 @@ export default function FieldTable({ fields = [], rules, bare }) {
                   </div>
                 </TD>
                 <TD>
-                  <TypeBadge t={f.primaryType} />
+                  <TypeBadge type={f.primaryType} />
                 </TD>
                 <TD align="right" className="text-xs">
                   {f.distinctCount ?? '—'}
@@ -166,14 +168,14 @@ export default function FieldTable({ fields = [], rules, bare }) {
                           className="max-w-[7rem] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
                           title={`${v} × ${c}`}
                         >
-                          {(v.length > 10 ? `${v.slice(0, 10)}…` : v) || '(空)'} ×{c}
+                          {(v.length > 10 ? `${v.slice(0, 10)}…` : v) || '(empty)'} ×{c}
                         </span>
                       ))}
                   </div>
                 </TD>
               </TR>
             ))}
-            {rows.length === 0 ? <EmptyRow colSpan={10}>无匹配字段</EmptyRow> : null}
+            {rows.length === 0 ? <EmptyRow colSpan={10}>{t('noMatchingFields')}</EmptyRow> : null}
           </TBody>
         </Table>
       </TableShell>
@@ -185,12 +187,12 @@ export default function FieldTable({ fields = [], rules, bare }) {
           disabled={cur === 0}
           onClick={() => setPage(cur - 1)}
         >
-          上一页
+          {t('prevPage')}
         </button>
         <span className="tabular-nums">
           {cur + 1} / {pages}
           <span className="mx-1 text-border">·</span>
-          共 {filtered.length}
+          {filtered.length}
         </span>
         <button
           type="button"
@@ -198,7 +200,7 @@ export default function FieldTable({ fields = [], rules, bare }) {
           disabled={cur >= pages - 1}
           onClick={() => setPage(cur + 1)}
         >
-          下一页
+          {t('nextPage')}
         </button>
       </div>
     </>
