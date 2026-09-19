@@ -1,3 +1,14 @@
+import JobProgress from '../components/JobProgress.jsx';
+import OverviewCards from '../components/OverviewCards.jsx';
+import CoverageChart from '../components/CoverageChart.jsx';
+import TypeChart from '../components/TypeChart.jsx';
+import FieldTable from '../components/FieldTable.jsx';
+import ValueDistribution from '../components/ValueDistribution.jsx';
+import QualityPanel from '../components/QualityPanel.jsx';
+import InsightsPanel from '../components/InsightsPanel.jsx';
+import ErrorBoundary from '../components/ErrorBoundary.jsx';
+import RulesRuntimeSection from '../components/RulesRuntimeSection.jsx';
+
 /** Presentational layout for analysis workbench */
 export default function WorkbenchLayout({
   busy, sidebarW, onResizeStart,
