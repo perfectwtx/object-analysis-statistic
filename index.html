@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>对象分析统计 · Object Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
     <script>
-      // 首屏防闪烁：必须在任何 CSS / 模块 JS 之前同步执行，否则会先按默认（深）色渲染再跳变。
-      // 与 src/theme.js 的逻辑保持一致：存的是模式，这里解析成明暗写到 data-theme。
       (function () {
         try {
           var mode = localStorage.getItem('themeMode');
