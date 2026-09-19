@@ -3,29 +3,31 @@ import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { buttonVariants } from '../components/ui/button.jsx';
 import { Card, CardHint, CardTitle } from '../components/ui/card.jsx';
 import { cn } from '../lib/cn.js';
+import { useT } from '../lib/i18n.js';
 
 export default function RelationsPage() {
+  const { t } = useT();
   return (
     <div>
       <PageHeader
-        title="关系分析"
-        subtitle="字段共现、外键候选与对象关联。需后端关系接口就绪后自动展示。"
+        title={t('relationsTitle')}
+        subtitle={t('relationsSubtitle')}
         actions={
           <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
-            去分析
+            {t('goAnalyze')}
           </Link>
         }
       />
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
-          <CardTitle>字段关系</CardTitle>
-          <CardHint>基于共现与相关性的候选关联。</CardHint>
-          <p className="mt-4 text-sm text-muted-foreground">完成一次分析后，可在工作台「深度分析」查看相关性。</p>
+          <CardTitle>{t('fieldRelations')}</CardTitle>
+          <CardHint>{t('fieldRelationsHint')}</CardHint>
+          <p className="mt-4 text-sm text-muted-foreground">{t('fieldRelationsBody')}</p>
         </Card>
         <Card>
-          <CardTitle>对象关系</CardTitle>
-          <CardHint>对象级引用与层级结构。</CardHint>
-          <p className="mt-4 text-sm text-muted-foreground">对接 <code className="text-xs">/api/jobs/&#123;id&#125;/relationships</code> 后启用。</p>
+          <CardTitle>{t('objectRelations')}</CardTitle>
+          <CardHint>{t('objectRelationsHint')}</CardHint>
+          <p className="mt-4 text-sm text-muted-foreground">{t('objectRelationsBody')}</p>
         </Card>
       </div>
     </div>

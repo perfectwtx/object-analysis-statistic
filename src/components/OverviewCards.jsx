@@ -1,4 +1,7 @@
+import { useT } from '../lib/i18n.js';
+
 export default function OverviewCards({ result }) {
+  const { t } = useT();
   if (!result) return null;
   const fields = result.fieldStatistics || [];
   const avgCov =
@@ -7,11 +10,11 @@ export default function OverviewCards({ result }) {
       : (fields.reduce((s, f) => s + (f.coverage ?? 0), 0) / fields.length) * 100;
 
   const cards = [
-    { label: '对象总数', value: fmt(result.totalObjects) },
-    { label: '唯一对象', value: fmt(result.totalUniqueObjects) },
-    { label: '重复组', value: fmt(result.totalDuplicateGroups) },
-    { label: '字段数', value: fmt(fields.length) },
-    { label: '平均覆盖率', value: avgCov == null ? '—' : `${avgCov.toFixed(1)}%` },
+    { label: t('totalObjects'), value: fmt(result.totalObjects) },
+    { label: t('uniqueObjects'), value: fmt(result.totalUniqueObjects) },
+    { label: t('duplicateGroups'), value: fmt(result.totalDuplicateGroups) },
+    { label: t('fieldCount'), value: fmt(fields.length) },
+    { label: t('avgCoverage'), value: avgCov == null ? '—' : `${avgCov.toFixed(1)}%` },
   ];
 
   return (

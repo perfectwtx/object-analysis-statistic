@@ -1,13 +1,18 @@
 import { formatNumber } from '../lib/cn.js';
 import { scoreTone } from './ui/progress.jsx';
+import { useT } from '../lib/i18n.js';
 
-export function ScoreRing({ score, size = 148, label = '综合健康分' }) {
+export function ScoreRing({ score, size = 148, label }) {
+  const { t } = useT();
+  const displayLabel = label ?? t('healthScore');
   const r = 54;
   const c = 2 * Math.PI * r;
   const dash = (Math.max(0, Math.min(100, score)) / 100) * c;
   const tone = scoreTone(score);
   const color =
     tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--warn)' : tone === 'danger' ? 'var(--danger)' : 'var(--primary)';
+  const status =
+    score >= 90 ? t('healthOk') : score >= 80 ? `${t('scoreUsable')} · ${t('healthWarn')}` : t('healthBad');
 
   return (
     <div className="flex items-center gap-5">
@@ -32,8 +37,8 @@ export function ScoreRing({ score, size = 148, label = '综合健康分' }) {
         </text>
       </svg>
       <div>
-        <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="mt-1 text-sm">{score >= 90 ? '健康' : score >= 80 ? '可用，仍有债' : '需要处理'}</div>
+        <div className="text-sm text-muted-foreground">{displayLabel}</div>
+        <div className="mt-1 text-sm">{status}</div>
       </div>
     </div>
   );

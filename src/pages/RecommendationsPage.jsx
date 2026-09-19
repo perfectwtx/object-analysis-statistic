@@ -1,12 +1,14 @@
 import { usePlatform } from '../lib/store.js';
 import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { Card } from '../components/ui/card.jsx';
+import { useT } from '../lib/i18n.js';
 
 export default function RecommendationsPage() {
+  const { t } = useT();
   const recs = usePlatform((s) => s.recommendations) || [];
   return (
     <div>
-      <PageHeader title="改进建议" subtitle="根据质量维度与问题自动生成的优先事项。" />
+      <PageHeader title={t('recsTitle')} subtitle={t('recsSubtitle')} />
       <div className="space-y-3">
         {recs.map((r, i) => (
           <Card key={r.id || i} className="flex gap-4">
@@ -20,7 +22,7 @@ export default function RecommendationsPage() {
           </Card>
         ))}
         {!recs.length ? (
-          <Card className="py-10 text-center text-sm text-muted-foreground">暂无建议，完成分析后会根据问题生成。</Card>
+          <Card className="py-10 text-center text-sm text-muted-foreground">{t('noRecs')}</Card>
         ) : null}
       </div>
     </div>
