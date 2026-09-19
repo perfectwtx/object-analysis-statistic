@@ -5,6 +5,9 @@ import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { BackendStatus } from '../components/BackendStatus.jsx';
 import { Button } from '../components/ui/button.jsx';
 import { Bar } from '../components/ui/progress.jsx';
+import {
+  TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
+} from '../components/ui/data-table.jsx';
 import { SEED_FIELDS } from '../lib/mock-data.js';
 import { asList, normalizeField, normalizeJob } from '../lib/normalize.js';
 import { cn, formatPct } from '../lib/cn.js';
@@ -49,45 +52,69 @@ export default function FieldQuality() {
 
   return (
     <div>
-      <PageHeader title="字段质量" subtitle={source === 'api' ? '列级覆盖与唯一性。' : '演示字段 · 选择后端作业后加载。'}
+      <PageHeader
+        title="字段质量"
+        subtitle={source === 'api' ? '列级覆盖与唯一性。' : '演示字段 · 选择后端作业后加载。'}
         actions={
           <>
             <BackendStatus />
-            <select className="h-9 max-w-[220px] rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] outline-none" value={jobId} onChange={(e) => setJobId(e.target.value)}>
+            <select
+              className="h-9 max-w-[220px] rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] outline-none"
+              value={jobId}
+              onChange={(e) => setJobId(e.target.value)}
+            >
               <option value="">选择作业</option>
               {jobs.map((j) => <option key={j.id} value={j.id}>{j.sourceName}</option>)}
             </select>
-            <Button variant="secondary" size="sm" disabled={loading}><RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />{loading ? '加载中' : '已同步'}</Button>
+            <Button variant="secondary" size="sm" disabled={loading}>
+              <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+              {loading ? '加载中' : '已同步'}
+            </Button>
           </>
         }
       />
-      {error ? <div className="mb-4 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</div> : null}
-      <div className="overflow-hidden rounded-xl bg-card shadow-[var(--elev)]">
-        <table className="w-full text-left text-sm">
-          <thead><tr className="border-b border-border text-xs text-muted-foreground">
-            <th className="px-4 py-3 font-medium">字段</th><th className="px-4 py-3 font-medium">类型</th>
-            <th className="px-4 py-3 font-medium min-w-[140px]">覆盖率</th><th className="px-4 py-3 font-medium">唯一率</th>
-            <th className="px-4 py-3 font-medium">有效率</th><th className="px-4 py-3 font-medium">异常数</th>
-          </tr></thead>
-          <tbody>
+      {error ? (
+        <div className="mb-4 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">{error}</div>
+      ) : null}
+      <TableShell>
+        <Table dense>
+          <THead sticky>
+            <tr>
+              <TH sticky>字段</TH>
+              <TH>类型</TH>
+              <TH className="min-w-[9rem]">覆盖率</TH>
+              <TH align="right">唯一率</TH>
+              <TH align="right">有效率</TH>
+              <TH align="right">异常数</TH>
+            </tr>
+          </THead>
+          <TBody>
             {fields.map((f) => {
               const cov = f.coverage != null ? (f.coverage <= 1 ? f.coverage * 100 : f.coverage) : null;
               const uni = f.uniqueness != null ? (f.uniqueness <= 1 ? f.uniqueness * 100 : f.uniqueness) : null;
               const val = f.validity != null ? (f.validity <= 1 ? f.validity * 100 : f.validity) : null;
               return (
-                <tr key={f.name} className="border-b border-border/70 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{f.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{f.primaryType}</td>
-                  <td className="px-4 py-3">{cov != null ? <div className="flex items-center gap-2"><Bar value={cov} className="max-w-[100px]" /><span className="tabular-nums text-xs">{formatPct(cov / 100)}</span></div> : '—'}</td>
-                  <td className="px-4 py-3 tabular-nums text-xs">{uni != null ? formatPct(uni / 100) : '—'}</td>
-                  <td className="px-4 py-3 tabular-nums text-xs">{val != null ? formatPct(val / 100) : '—'}</td>
-                  <td className="px-4 py-3 tabular-nums">{f.outlierCount ?? '—'}</td>
-                </tr>
+                <TR key={f.name}>
+                  <TD sticky mono className="max-w-[12rem] truncate" title={f.name}>{f.name}</TD>
+                  <TD muted className="whitespace-nowrap">{f.primaryType || '—'}</TD>
+                  <TD>
+                    {cov != null ? (
+                      <div className="flex items-center gap-2">
+                        <Bar value={cov} className="max-w-[100px]" />
+                        <span className="w-12 text-right tabular-nums text-xs">{formatPct(cov / 100)}</span>
+                      </div>
+                    ) : '—'}
+                  </TD>
+                  <TD align="right" className="text-xs">{uni != null ? formatPct(uni / 100) : '—'}</TD>
+                  <TD align="right" className="text-xs">{val != null ? formatPct(val / 100) : '—'}</TD>
+                  <TD align="right">{f.outlierCount ?? '—'}</TD>
+                </TR>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+            {!fields.length ? <EmptyRow colSpan={6}>{loading ? '加载中…' : '暂无字段'}</EmptyRow> : null}
+          </TBody>
+        </Table>
+      </TableShell>
     </div>
   );
 }
