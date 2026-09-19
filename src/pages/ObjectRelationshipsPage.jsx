@@ -3,22 +3,22 @@ import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { buttonVariants } from '../components/ui/button.jsx';
 import { Card } from '../components/ui/card.jsx';
 import { cn } from '../lib/cn.js';
+import { useT } from '../lib/i18n.js';
 
 export default function ObjectRelationshipsPage() {
+  const { t } = useT();
   return (
     <div>
       <PageHeader
-        title="对象关系"
-        subtitle="对象之间的引用与聚合结构。"
+        title={t('objectRelTitle')}
+        subtitle={t('objectRelSubtitle')}
         actions={
           <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
-            去分析
+            {t('goAnalyze')}
           </Link>
         }
       />
-      <Card className="py-12 text-center text-sm text-muted-foreground">
-        等待后端关系接口。可先在分析工作台查看字段相关性。
-      </Card>
+      <Card className="py-12 text-center text-sm text-muted-foreground">{t('objectRelEmpty')}</Card>
     </div>
   );
 }
