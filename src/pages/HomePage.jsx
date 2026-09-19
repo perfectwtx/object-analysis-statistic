@@ -11,6 +11,7 @@ import { Card, CardHint, CardTitle } from '../components/ui/card.jsx';
 import { DIM_LABEL, SEVERITY_LABEL } from '../lib/mock-data.js';
 import { usePlatform } from '../lib/store.js';
 import { cn, formatNumber } from '../lib/cn.js';
+import { t } from '../lib/i18n.js';
 import {
   TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
 } from '../components/ui/data-table.jsx';
@@ -24,6 +25,7 @@ export default function HomePage() {
   const loading = usePlatform((s) => s.loading);
   const error = usePlatform((s) => s.error);
   const refresh = usePlatform((s) => s.refresh);
+  const locale = usePlatform((s) => s.locale);
 
   useEffect(() => {
     refresh();
@@ -35,17 +37,17 @@ export default function HomePage() {
   return (
     <div>
       <PageHeader
-        title="数据质量总览"
-        subtitle={source === 'api' ? '实时对接后端平台数据。' : '演示模式 · 启动 ObjectAnalyzer.Api 后自动切换。'}
+        title={t(locale, 'homeTitle')}
+        subtitle={source === 'api' ? t(locale, 'homeSubtitleApi') : t(locale, 'homeSubtitleDemo')}
         actions={
           <>
             <BackendStatus />
             <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={loading}>
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-              刷新
+              {t(locale, 'refresh')}
             </Button>
             <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
-              新建分析
+              {t(locale, 'newAnalyze')}
               <ArrowRight className="size-4" />
             </Link>
           </>
@@ -63,22 +65,22 @@ export default function HomePage() {
           <ScoreRing score={displayScore} />
           <div className="mt-6 grid grid-cols-3 gap-3 border-t border-border pt-4">
             <div>
-              <div className="text-[11px] text-muted-foreground">作业</div>
+              <div className="text-[11px] text-muted-foreground">{t(locale, 'jobs')}</div>
               <div className="mt-0.5 text-lg font-medium tabular-nums">{jobs?.length ?? 0}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">问题</div>
+              <div className="text-[11px] text-muted-foreground">{t(locale, 'issueCount')}</div>
               <div className="mt-0.5 text-lg font-medium tabular-nums">{issues?.length ?? 0}</div>
             </div>
             <div>
-              <div className="text-[11px] text-muted-foreground">数据源</div>
+              <div className="text-[11px] text-muted-foreground">{t(locale, 'dataSource')}</div>
               <div className="mt-0.5 text-sm font-medium">{source === 'api' ? 'API' : 'Demo'}</div>
             </div>
           </div>
         </Card>
         <Card>
-          <CardTitle>五维质量</CardTitle>
-          <CardHint>完整性 · 有效性 · 唯一性 · 一致性 · 异常</CardHint>
+          <CardTitle>{t(locale, 'dimQuality')}</CardTitle>
+          <CardHint>{t(locale, 'dimHint')}</CardHint>
           <div className="mt-5">
             <DimBars dims={dims} />
           </div>
@@ -88,18 +90,18 @@ export default function HomePage() {
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium">最近作业</h2>
+            <h2 className="text-sm font-medium">{t(locale, 'recentJobs')}</h2>
             <Link to="/quality" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'no-underline')}>
-              全部
+              {t(locale, 'all')}
             </Link>
           </div>
           <TableShell>
             <Table dense>
               <THead>
                 <tr>
-                  <TH>来源</TH>
-                  <TH align="right">分数</TH>
-                  <TH align="right">问题</TH>
+                  <TH>{t(locale, 'source')}</TH>
+                  <TH align="right">{t(locale, 'score')}</TH>
+                  <TH align="right">{t(locale, 'issueCount')}</TH>
                 </tr>
               </THead>
               <TBody>
@@ -110,16 +112,16 @@ export default function HomePage() {
                     <TD align="right">{j.issueCount ?? '—'}</TD>
                   </TR>
                 ))}
-                {!jobs.length ? <EmptyRow colSpan={3}>暂无作业</EmptyRow> : null}
+                {!jobs.length ? <EmptyRow colSpan={3}>{t(locale, 'noData')}</EmptyRow> : null}
               </TBody>
             </Table>
           </TableShell>
         </div>
         <div>
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-medium">优先问题</h2>
+            <h2 className="text-sm font-medium">{t(locale, 'priorityIssues')}</h2>
             <Link to="/issues" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'no-underline')}>
-              问题中心
+              {t(locale, 'issueCenter')}
             </Link>
           </div>
           <div className="space-y-2">
@@ -135,7 +137,7 @@ export default function HomePage() {
               </Card>
             ))}
             {!topIssues.length ? (
-              <Card className="py-8 text-center text-sm text-muted-foreground">暂无问题</Card>
+              <Card className="py-8 text-center text-sm text-muted-foreground">{t(locale, 'noData')}</Card>
             ) : null}
           </div>
         </div>
