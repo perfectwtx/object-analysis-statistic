@@ -1,17 +1,17 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Moon, Search, Sun } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button } from '../ui/button.jsx';
 import { PRIMARY_NAV, SEARCH_TARGETS, activeSection } from '../../lib/nav.js';
 import { usePlatform } from '../../lib/store.js';
+import { t } from '../../lib/i18n.js';
 import { cn } from '../../lib/cn.js';
 import { BackendStatus } from '../BackendStatus.jsx';
+import ThemeSwitch, { LocaleSwitch } from '../ThemeSwitch.jsx';
 
 export function TopNav() {
   const { pathname } = useLocation();
   const section = activeSection(pathname);
-  const theme = usePlatform((s) => s.theme);
-  const setTheme = usePlatform((s) => s.setTheme);
+  const locale = usePlatform((s) => s.locale);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const box = useRef(null);
@@ -19,11 +19,21 @@ export function TopNav() {
 
   const hits = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return SEARCH_TARGETS.slice(0, 6);
-    return SEARCH_TARGETS.filter(
-      (t) => t.label.toLowerCase().includes(s) || t.hint.includes(s) || t.to.includes(s),
-    ).slice(0, 8);
-  }, [q]);
+    const mapped = SEARCH_TARGETS.map((item) => ({
+      ...item,
+      label: t(locale, item.labelKey),
+      hint: t(locale, item.hintKey),
+    }));
+    if (!s) return mapped.slice(0, 6);
+    return mapped
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(s) ||
+          item.hint.toLowerCase().includes(s) ||
+          item.to.includes(s),
+      )
+      .slice(0, 8);
+  }, [q, locale]);
 
   useEffect(() => {
     const onDoc = (e) => {
@@ -39,12 +49,20 @@ export function TopNav() {
         <Link to="/" className="flex shrink-0 items-center gap-2.5 text-foreground no-underline">
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M4 19V5M4 19h16M7 15l3.5-5 2.8 2.4L18 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d="M4 19V5M4 19h16M7 15l3.5-5 2.8 2.4L18 7"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
             </svg>
           </span>
           <span className="hidden leading-tight sm:block">
-            <span className="block text-sm font-medium">Object Analyzer</span>
-            <span className="block text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Quality</span>
+            <span className="block text-sm font-medium">{t(locale, 'appName')}</span>
+            <span className="block text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Quality
+            </span>
           </span>
         </Link>
 
@@ -57,18 +75,20 @@ export function TopNav() {
                   key={item.id}
                   to={item.to}
                   className={cn(
-                    'rounded-full px-3 py-1.5 text-sm no-underline transition-colors sm:px-4',
-                    on ? 'bg-card text-foreground shadow-[var(--elev)]' : 'text-muted-foreground hover:text-foreground',
+                    'shrink-0 rounded-full px-3.5 py-1.5 text-sm no-underline transition-colors',
+                    on
+                      ? 'bg-card text-foreground shadow-[var(--elev)]'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {item.label}
+                  {t(locale, item.labelKey)}
                 </Link>
               );
             })}
           </div>
         </nav>
 
-        <div className="relative hidden w-52 md:block" ref={box}>
+        <div className="relative hidden w-44 md:block lg:w-52" ref={box}>
           <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             value={q}
@@ -77,11 +97,11 @@ export function TopNav() {
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
-            placeholder="搜索页面"
+            placeholder={t(locale, 'searchPlaceholder')}
             className="h-10 w-full rounded-lg bg-muted pl-9 pr-3 text-sm text-foreground shadow-[var(--elev)] outline-none placeholder:text-muted-foreground"
           />
           {open ? (
-            <div className="absolute top-[calc(100%+8px)] right-0 left-0 overflow-hidden rounded-xl bg-card py-1 shadow-[var(--elev)]">
+            <div className="absolute top-[calc(100%+8px)] right-0 left-0 z-50 overflow-hidden rounded-xl bg-card py-1 shadow-[var(--elev)]">
               {hits.map((h) => (
                 <button
                   key={h.to}
@@ -94,29 +114,25 @@ export function TopNav() {
                   }}
                 >
                   <span className="text-sm">{h.label}</span>
-                  <span className="text-xs text-muted-foreground">{h.hint}</span>
+                  <span className="text-xs text-muted-foreground line-clamp-1">{h.hint}</span>
                 </button>
               ))}
             </div>
           ) : null}
         </div>
 
-        <BackendStatus className="hidden sm:inline-flex" />
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="切换主题"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        >
-          {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </Button>
+        <BackendStatus className="hidden lg:inline-flex" />
+        <LocaleSwitch />
+        <ThemeSwitch compact />
       </div>
 
       {section?.children?.length ? (
         <div className="border-t border-border/70">
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2 sm:px-6">
             {section.children.map((c) => {
-              const on = c.exact ? pathname === c.to : pathname === c.to || pathname.startsWith(`${c.to}/`);
+              const on = c.exact
+                ? pathname === c.to
+                : pathname === c.to || pathname.startsWith(`${c.to}/`);
               return (
                 <Link
                   key={c.to}
@@ -126,7 +142,7 @@ export function TopNav() {
                     on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {c.label}
+                  {t(locale, c.labelKey)}
                 </Link>
               );
             })}

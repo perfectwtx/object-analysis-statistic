@@ -27,20 +27,44 @@ export const usePlatform = create((set, get) => ({
   error: null,
   lastLoadedAt: null,
   theme: 'dark',
+  locale: 'zh',
 
   toggleAlert: (id) =>
     set((s) => ({
       alerts: s.alerts.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a)),
     })),
 
-  setTheme: (t) => {
-    set({ theme: t });
+  setLocale: (locale) => {
+    const next = locale === 'en' ? 'en' : 'zh';
+    set({ locale: next });
     if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('light', t === 'light');
-      document.documentElement.dataset.theme = t;
+      document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN';
       try {
-        localStorage.setItem('oa-theme', t);
-        localStorage.setItem('themeMode', t);
+        localStorage.setItem('oa-locale', next);
+      } catch {
+        /* ignore */
+      }
+    }
+  },
+
+  setTheme: (mode) => {
+    const allowed = ['light', 'dark', 'eyecare', 'system'];
+    const next = allowed.includes(mode) ? mode : 'dark';
+    let resolved = next;
+    if (next === 'system' && typeof window !== 'undefined' && window.matchMedia) {
+      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    set({ theme: resolved === 'system' ? 'dark' : resolved });
+    if (typeof document !== 'undefined') {
+      const theme = resolved === 'system' ? 'dark' : resolved;
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.classList.toggle('light', theme === 'light');
+      document.documentElement.classList.toggle('eyecare', theme === 'eyecare');
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+      document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+      try {
+        localStorage.setItem('oa-theme', theme);
+        localStorage.setItem('themeMode', next);
       } catch {
         /* ignore */
       }
@@ -75,8 +99,19 @@ export const usePlatform = create((set, get) => ({
 
 export function hydrateTheme() {
   try {
-    const t = localStorage.getItem('oa-theme') || localStorage.getItem('themeMode');
-    if (t === 'light' || t === 'dark') usePlatform.getState().setTheme(t);
+    const t = localStorage.getItem('themeMode') || localStorage.getItem('oa-theme');
+    if (t === 'light' || t === 'dark' || t === 'eyecare' || t === 'system') {
+      usePlatform.getState().setTheme(t);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hydrateLocale() {
+  try {
+    const loc = localStorage.getItem('oa-locale');
+    if (loc === 'en' || loc === 'zh') usePlatform.getState().setLocale(loc);
   } catch {
     /* ignore */
   }
