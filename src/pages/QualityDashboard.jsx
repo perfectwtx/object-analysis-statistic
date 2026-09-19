@@ -9,6 +9,9 @@ import { Button, buttonVariants } from '../components/ui/button.jsx';
 import { Card, CardHint, CardTitle } from '../components/ui/card.jsx';
 import { usePlatform } from '../lib/store.js';
 import { cn, formatNumber } from '../lib/cn.js';
+import {
+  TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
+} from '../components/ui/data-table.jsx';
 
 export default function QualityDashboard() {
   const jobs = usePlatform((s) => s.jobs);
@@ -47,33 +50,31 @@ export default function QualityDashboard() {
           <h2 className="text-sm font-medium">最近作业</h2>
           <Link to="/analyze" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'no-underline')}>新建分析</Link>
         </div>
-        <div className="overflow-hidden rounded-xl bg-card shadow-[var(--elev)]">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground">
-                <th className="px-4 py-3 font-medium">来源</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">行数</th>
-                <th className="px-4 py-3 font-medium">分数</th>
-                <th className="px-4 py-3 font-medium">问题</th>
+        <TableShell>
+          <Table dense>
+            <THead sticky>
+              <tr>
+                <TH>来源</TH>
+                <TH>状态</TH>
+                <TH align="right">行数</TH>
+                <TH align="right">分数</TH>
+                <TH align="right">问题</TH>
               </tr>
-            </thead>
-            <tbody>
+            </THead>
+            <TBody>
               {jobs.map((j) => (
-                <tr key={j.id} className="border-b border-border/70 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{j.sourceName}</td>
-                  <td className="px-4 py-3 capitalize text-muted-foreground">{j.status}</td>
-                  <td className="px-4 py-3 tabular-nums">{j.rows ?? '—'}</td>
-                  <td className="px-4 py-3 tabular-nums">{j.score != null ? formatNumber(j.score, 1) : '—'}</td>
-                  <td className="px-4 py-3">{j.issueCount ?? '—'}</td>
-                </tr>
+                <TR key={j.id}>
+                  <TD mono className="max-w-[14rem] truncate" title={j.sourceName}>{j.sourceName}</TD>
+                  <TD muted className="capitalize whitespace-nowrap">{j.status}</TD>
+                  <TD align="right">{j.rows ?? '—'}</TD>
+                  <TD align="right">{j.score != null ? formatNumber(j.score, 1) : '—'}</TD>
+                  <TD align="right">{j.issueCount ?? '—'}</TD>
+                </TR>
               ))}
-              {!jobs.length ? (
-                <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">暂无作业</td></tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+              {!jobs.length ? <EmptyRow colSpan={5}>暂无作业</EmptyRow> : null}
+            </TBody>
+          </Table>
+        </TableShell>
       </div>
     </div>
   );
