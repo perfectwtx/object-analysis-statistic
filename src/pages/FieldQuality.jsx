@@ -11,8 +11,10 @@ import {
 import { SEED_FIELDS } from '../lib/mock-data.js';
 import { asList, normalizeField, normalizeJob } from '../lib/normalize.js';
 import { cn, formatPct } from '../lib/cn.js';
+import { useT } from '../lib/i18n.js';
 
 export default function FieldQuality() {
+  const { t } = useT();
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState([]);
   const [jobId, setJobId] = useState('');
@@ -53,8 +55,8 @@ export default function FieldQuality() {
   return (
     <div>
       <PageHeader
-        title="字段质量"
-        subtitle={source === 'api' ? '列级覆盖与唯一性。' : '演示字段 · 选择后端作业后加载。'}
+        title={t('fieldQuality')}
+        subtitle={source === 'api' ? t('fieldQualitySubtitleApi') : t('fieldQualitySubtitleDemo')}
         actions={
           <>
             <BackendStatus />
@@ -63,12 +65,12 @@ export default function FieldQuality() {
               value={jobId}
               onChange={(e) => setJobId(e.target.value)}
             >
-              <option value="">选择作业</option>
+              <option value="">{t('selectJob')}</option>
               {jobs.map((j) => <option key={j.id} value={j.id}>{j.sourceName}</option>)}
             </select>
             <Button variant="secondary" size="sm" disabled={loading}>
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-              {loading ? '加载中' : '已同步'}
+              {loading ? t('loading') : t('synced')}
             </Button>
           </>
         }
@@ -80,12 +82,12 @@ export default function FieldQuality() {
         <Table dense>
           <THead sticky>
             <tr>
-              <TH sticky>字段</TH>
-              <TH>类型</TH>
-              <TH className="min-w-[9rem]">覆盖率</TH>
-              <TH align="right">唯一率</TH>
-              <TH align="right">有效率</TH>
-              <TH align="right">异常数</TH>
+              <TH sticky>{t('field')}</TH>
+              <TH>{t('type')}</TH>
+              <TH className="min-w-[9rem]">{t('coverage')}</TH>
+              <TH align="right">{t('uniqueness')}</TH>
+              <TH align="right">{t('validity')}</TH>
+              <TH align="right">{t('outlierCount')}</TH>
             </tr>
           </THead>
           <TBody>
@@ -111,7 +113,7 @@ export default function FieldQuality() {
                 </TR>
               );
             })}
-            {!fields.length ? <EmptyRow colSpan={6}>{loading ? '加载中…' : '暂无字段'}</EmptyRow> : null}
+            {!fields.length ? <EmptyRow colSpan={6}>{loading ? t('loading') : t('noFields')}</EmptyRow> : null}
           </TBody>
         </Table>
       </TableShell>
