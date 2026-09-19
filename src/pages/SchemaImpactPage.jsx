@@ -1,11 +1,24 @@
-import PlaceholderPage from './PlaceholderPage.jsx';
+import { Link } from 'react-router-dom';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
+import { buttonVariants } from '../components/ui/button.jsx';
+import { Card } from '../components/ui/card.jsx';
+import { cn } from '../lib/cn.js';
+
 export default function SchemaImpactPage() {
   return (
-    <PlaceholderPage
-      title="Schema Impact"
-      subtitle="Schema Diff 与下游影响"
-      feature="Schema Impact"
-      endpoint="GET /api/analysis/jobs/{jobId}/impact · result.schemaDiff"
-    />
+    <div>
+      <PageHeader
+        title="Schema 影响"
+        subtitle="Schema 变更对下游的影响评估。"
+        actions={
+          <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
+            去分析
+          </Link>
+        }
+      />
+      <Card className="py-12 text-center text-sm text-muted-foreground">
+        接口 <code className="text-xs">/api/jobs/&#123;id&#125;/schema-impact</code> 就绪后将在此展示。
+      </Card>
+    </div>
   );
 }

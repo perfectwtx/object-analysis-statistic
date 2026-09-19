@@ -1,19 +1,24 @@
-import { getDataLineage } from '../api/index.js';
-import JobDependentPage from './JobDependentPage.jsx';
+import { Link } from 'react-router-dom';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
+import { buttonVariants } from '../components/ui/button.jsx';
+import { Card } from '../components/ui/card.jsx';
+import { cn } from '../lib/cn.js';
 
 export default function DataLineagePage() {
   return (
-    <JobDependentPage
-      title="Data Lineage"
-      subtitle="对象关系推导的数据血缘（需持久化 Job）"
-      endpointTemplate="GET /api/analysis/jobs/{jobId}/lineage"
-      fetchByJobId={getDataLineage}
-      renderData={(data) => (
-        <div className="panel">
-          <h2 className="panel-title">血缘结构</h2>
-          <pre className="json-block mono">{JSON.stringify(data, null, 2)}</pre>
-        </div>
-      )}
-    />
+    <div>
+      <PageHeader
+        title="数据血缘"
+        subtitle="字段与作业之间的来源与去向。"
+        actions={
+          <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
+            去分析
+          </Link>
+        }
+      />
+      <Card className="py-12 text-center text-sm text-muted-foreground">
+        接口 <code className="text-xs">/api/jobs/&#123;id&#125;/lineage</code> 就绪后将在此展示。
+      </Card>
+    </div>
   );
 }

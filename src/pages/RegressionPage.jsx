@@ -1,19 +1,24 @@
-import { getQualityRegression } from '../api/index.js';
-import JobDependentPage from './JobDependentPage.jsx';
+import { Link } from 'react-router-dom';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
+import { buttonVariants } from '../components/ui/button.jsx';
+import { Card } from '../components/ui/card.jsx';
+import { cn } from '../lib/cn.js';
 
 export default function RegressionPage() {
   return (
-    <JobDependentPage
-      title="Regression"
-      subtitle="质量回归对比"
-      endpointTemplate="GET /api/quality/regression?jobB="
-      fetchByJobId={async (jobId) => getQualityRegression({ jobB: jobId })}
-      renderData={(data) => (
-        <div className="panel">
-          <h2 className="panel-title">回归结果</h2>
-          <pre className="json-block mono">{JSON.stringify(data, null, 2)}</pre>
-        </div>
-      )}
-    />
+    <div>
+      <PageHeader
+        title="质量回归"
+        subtitle="相对基线的质量下滑检测。"
+        actions={
+          <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
+            去分析
+          </Link>
+        }
+      />
+      <Card className="py-12 text-center text-sm text-muted-foreground">
+        接口 <code className="text-xs">/api/quality/regression</code> 就绪后将在此展示。
+      </Card>
+    </div>
   );
 }
