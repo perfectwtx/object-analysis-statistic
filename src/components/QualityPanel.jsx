@@ -1,3 +1,7 @@
+import {
+  TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
+} from './ui/data-table.jsx';
+
 export default function QualityPanel({ violations = [], bare }) {
   if (!violations.length) {
     return (
@@ -9,38 +13,45 @@ export default function QualityPanel({ violations = [], bare }) {
     );
   }
 
-  return (
-    <div className={bare ? '' : 'rounded-xl bg-card p-4 shadow-[var(--elev)]'}>
+  const body = (
+    <>
       <div className="mb-3 text-sm font-medium">
         质量违规
-        <span className="ml-2 rounded-full bg-danger/15 px-2 py-0.5 text-xs text-danger">
+        <span className="ml-2 rounded-full bg-danger/15 px-2 py-0.5 text-xs tabular-nums text-danger">
           {violations.length}
         </span>
       </div>
-      <div className="overflow-hidden rounded-xl border border-border">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
-              <th className="px-3 py-2.5 font-medium">字段</th>
-              <th className="px-3 py-2.5 font-medium">检查项</th>
-              <th className="px-3 py-2.5 font-medium">数量</th>
-              <th className="px-3 py-2.5 font-medium">说明</th>
+      <TableShell>
+        <Table dense>
+          <THead sticky>
+            <tr>
+              <TH>字段</TH>
+              <TH>检查项</TH>
+              <TH align="right">数量</TH>
+              <TH>说明</TH>
             </tr>
-          </thead>
-          <tbody>
+          </THead>
+          <TBody>
             {violations.map((v, i) => (
-              <tr key={i} className="border-b border-border/70 last:border-0 align-top">
-                <td className="px-3 py-2.5 font-mono text-xs">{v.field || v.Field || '（数据集）'}</td>
-                <td className="px-3 py-2.5">{v.check || v.Check || v.rule || '—'}</td>
-                <td className="px-3 py-2.5 tabular-nums">{v.count ?? v.Count ?? '—'}</td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                  {v.message || v.Message || v.detail || '—'}
-                </td>
-              </tr>
+              <TR key={i}>
+                <TD mono className="whitespace-nowrap">
+                  {v.field || v.Field || '（数据集）'}
+                </TD>
+                <TD className="whitespace-nowrap">{v.check || v.Check || v.rule || '—'}</TD>
+                <TD align="right">{v.count ?? v.Count ?? '—'}</TD>
+                <TD muted className="max-w-md" title={v.message || v.Message || v.detail || ''}>
+                  <span className="line-clamp-2">
+                    {v.message || v.Message || v.detail || '—'}
+                  </span>
+                </TD>
+              </TR>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+          </TBody>
+        </Table>
+      </TableShell>
+    </>
   );
+
+  if (bare) return <div>{body}</div>;
+  return <div className="rounded-xl bg-card p-4 shadow-[var(--elev)]">{body}</div>;
 }
