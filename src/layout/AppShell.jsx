@@ -1,44 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { health, getBaseUrl, setBaseUrl } from '../api/index.js';
-import TopNav from './TopNav.jsx';
+import { useEffect } from 'react';
+import { TopNav } from '../components/layout/TopNav.jsx';
+import { hydrateTheme } from '../lib/store.js';
+import { cn } from '../lib/cn.js';
 
 export default function AppShell() {
   const { pathname } = useLocation();
-  const isWorkbench = pathname === '/' || pathname === '';
-  const [apiState, setApiState] = useState({ status: 'unknown', version: null, error: null });
-  const [baseUrlInput, setBaseUrlInput] = useState(() => getBaseUrl());
-
-  const checkApi = useCallback(async () => {
-    setApiState({ status: 'checking', version: null, error: null });
-    try {
-      const h = await health();
-      setApiState({ status: 'ok', version: h?.version ?? null, error: null });
-    } catch (e) {
-      setApiState({ status: 'error', version: null, error: e.message });
-    }
-  }, []);
+  const flush = pathname.startsWith('/analyze');
 
   useEffect(() => {
-    checkApi();
-  }, [checkApi]);
-
-  const onApplyBaseUrl = useCallback(() => {
-    setBaseUrl(baseUrlInput);
-    checkApi();
-  }, [baseUrlInput, checkApi]);
+    hydrateTheme();
+  }, []);
 
   return (
-    <div className={`product-shell${isWorkbench ? ' is-workbench' : ''}`}>
-      <TopNav
-        apiState={apiState}
-        onRetryHealth={checkApi}
-        baseUrlInput={baseUrlInput}
-        setBaseUrlInput={setBaseUrlInput}
-        onApplyBaseUrl={onApplyBaseUrl}
-      />
-      <main className={`product-main${isWorkbench ? ' is-flush' : ''}`}>
-        <Outlet context={{ apiState, checkApi }} />
+    <div className="min-h-dvh bg-background text-foreground">
+      <TopNav />
+      <main className={cn(flush ? 'min-h-[calc(100dvh-57px)]' : 'mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10')}>
+        <Outlet />
       </main>
     </div>
   );

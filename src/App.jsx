@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from './layout/AppShell.jsx';
+import HomePage from './pages/HomePage.jsx';
 import AnalyzeWorkbench from './pages/AnalyzeWorkbench.jsx';
 import QualityDashboard from './pages/QualityDashboard.jsx';
 import QualityTrend from './pages/QualityTrend.jsx';
@@ -20,7 +21,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<AnalyzeWorkbench />} />
+          <Route index element={<HomePage />} />
+          <Route path="analyze" element={<AnalyzeWorkbench />} />
           <Route path="quality" element={<QualityDashboard />} />
           <Route path="quality/trend" element={<QualityTrend />} />
           <Route path="quality/fields" element={<FieldQuality />} />
