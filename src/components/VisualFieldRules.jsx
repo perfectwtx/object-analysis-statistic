@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { cn } from '../lib/cn.js';
 import VisualExpectations from './VisualExpectations.jsx';
+import PiiMaskEditor from './PiiMaskEditor.jsx';
 import { parseFieldsFromText, writeFieldsIntoText, mergeFieldNamesIntoRulesText } from '../lib/fieldRules.js';
 export { mergeFieldNamesIntoRulesText };
 
@@ -39,7 +40,7 @@ function ruleFromObj(obj) {
       },
     };
   } else {
-    r._pii = { enabled: false, label: '', highSeverity: true, mask: { keepPrefix: 0, keepSuffix: 0, maskChar: '*', maskAll: false } };
+    r._pii = { enabled: false, label: '', highSeverity: true, mask: { keepPrefix: 3, keepSuffix: 4, maskChar: '*', maskAll: false } };
   }
   return r;
 }
@@ -92,12 +93,17 @@ function objFromRule(form) {
     if (pii.label) p.label = pii.label;
     p.highSeverity = pii.highSeverity !== false;
     const m = pii.mask || {};
-    const mask = {};
-    if (m.maskAll) mask.maskAll = true;
-    if (m.keepPrefix) mask.keepPrefix = Number(m.keepPrefix) || 0;
-    if (m.keepSuffix) mask.keepSuffix = Number(m.keepSuffix) || 0;
-    if (m.maskChar && m.maskChar !== '*') mask.maskChar = m.maskChar;
-    p.mask = Object.keys(mask).length ? mask : { maskAll: true };
+    if (m.maskAll) {
+      p.mask = { maskAll: true };
+      if (m.maskChar && m.maskChar !== '*') p.mask.maskChar = m.maskChar;
+    } else {
+      p.mask = {
+        maskAll: false,
+        keepPrefix: Number(m.keepPrefix) || 0,
+        keepSuffix: Number(m.keepSuffix) || 0,
+        maskChar: (m.maskChar && String(m.maskChar)) || '*',
+      };
+    }
     out.pii = p;
   }
   return out;
@@ -129,16 +135,7 @@ function ChipGroup({ options, value, onChange, busy }) {
         const v = typeof o === 'string' ? o : o.value;
         const label = typeof o === 'string' ? (o || '默认') : o.label;
         return (
-          <button
-            key={v || 'none'}
-            type="button"
-            disabled={busy}
-            onClick={() => onChange(v)}
-            className={cn(
-              'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-              (value || '') === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground',
-            )}
-          >
+          <button key={v || 'none'} type="button" disabled={busy} onClick={() => onChange(v)} className={cn('rounded-full px-2.5 py-1 text-xs font-medium transition-colors', (value || '') === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}>
             {label}
           </button>
         );
@@ -327,30 +324,13 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
 
                     <div>
                       <div className="mb-2 text-xs font-medium text-muted-foreground">PII / 打码</div>
-                      <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                        <label className={cn('flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5', pii.enabled ? 'border-primary/40 bg-primary/5' : 'border-border')}>
-                          <input type="checkbox" className="mt-0.5 size-4 rounded border-border" checked={!!pii.enabled} disabled={busy} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, enabled: e.target.checked } })} />
-                          <span><span className="text-sm font-medium">声明为敏感字段 pii</span><span className="mt-0.5 block text-[11px] text-muted-foreground">报告输出前自动打码</span></span>
-                        </label>
-                        {pii.enabled ? (
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">标签 label</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" placeholder="内部标识" disabled={busy} value={pii.label || ''} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, label: e.target.value } })} /></label>
-                            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2"><input type="checkbox" className="size-4 rounded border-border" checked={pii.highSeverity !== false} disabled={busy} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, highSeverity: e.target.checked } })} /><span className="text-sm">高敏感</span></label>
-                            <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 sm:col-span-2"><input type="checkbox" className="size-4 rounded border-border" checked={!!pii.mask?.maskAll} disabled={busy} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, mask: { ...pii.mask, maskAll: e.target.checked } } })} /><span className="text-sm">整值打码 maskAll</span></label>
-                            {!pii.mask?.maskAll ? (
-                              <>
-                                <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">保留前缀</span><input type="number" min={0} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={pii.mask?.keepPrefix ?? 0} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, mask: { ...pii.mask, keepPrefix: e.target.value } } })} /></label>
-                                <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">保留后缀</span><input type="number" min={0} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={pii.mask?.keepSuffix ?? 0} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, mask: { ...pii.mask, keepSuffix: e.target.value } } })} /></label>
-                              </>
-                            ) : null}
-                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">打码字符</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={pii.mask?.maskChar ?? '*'} onChange={(e) => updateField(name, { ...rule, _pii: { ...pii, mask: { ...pii.mask, maskChar: e.target.value || '*' } } })} /></label>
-                          </div>
-                        ) : null}
-                        <div className="pt-1">
-                          <div className="mb-1.5 text-[11px] text-muted-foreground">redact</div>
-                          <ChipGroup options={[{ value: '', label: '自动' }, { value: 'true', label: '强制打码' }, { value: 'false', label: '永不打码' }]} value={rule.redact === true ? 'true' : rule.redact === false ? 'false' : ''} busy={busy} onChange={(v) => updateField(name, { ...rule, redact: v === 'true' ? true : v === 'false' ? false : undefined })} />
-                        </div>
-                      </div>
+                      <PiiMaskEditor
+                        pii={pii}
+                        busy={busy}
+                        redact={rule.redact}
+                        onChange={(nextPii) => updateField(name, { ...rule, _pii: nextPii })}
+                        onRedactChange={(v) => updateField(name, { ...rule, redact: v })}
+                      />
                     </div>
                   </div>
                 ) : null}
