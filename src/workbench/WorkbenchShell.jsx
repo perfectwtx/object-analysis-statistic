@@ -11,6 +11,11 @@ import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesTe
 import { SAMPLE_DATA } from '../sampleData.js';
 import { RULES_TEMPLATE } from '../components/RulesEditor.jsx';
 import WorkbenchLayout from './WorkbenchLayout.jsx';
+import {
+  loadAnalyzeOptions,
+  saveAnalyzeOptions,
+  toAnalyzeRequestOptions,
+} from '../lib/analyzeOptions.js';
 
 const TABS = [
   { key: 'fields', label: '字段明细' },
@@ -18,7 +23,6 @@ const TABS = [
   { key: 'values', label: '取值分布' },
   { key: 'quality', label: '质量报告' },
 ];
-const TEXT_FORMATS = ['json', 'jsonl', 'csv', 'yaml', 'xml'];
 const EMPTY_INSIGHTS = {
   correlations: { fields: [], pairs: [], strongPairs: [] },
   patterns: {}, hygiene: {},
@@ -66,6 +70,14 @@ export default function Workbench() {
   const [features, setFeatures] = useState(loadFeatures);
   const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
   const [forceAsync, setForceAsync] = useState(false);
+  const [analyzeOptions, setAnalyzeOptionsState] = useState(loadAnalyzeOptions);
+  const setAnalyzeOptions = (updater) => {
+    setAnalyzeOptionsState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveAnalyzeOptions(next);
+      return next;
+    });
+  };
   const [configOpen, setConfigOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -151,10 +163,21 @@ export default function Workbench() {
     const activeRules = rulesOverride !== undefined ? rulesOverride : rules;
     const { flatten, selectedFields, filter, ...ruleBody } = activeRules || {};
     const rulesJson = activeRules ? JSON.stringify(ruleBody) : null;
-    const opts = { rulesJson, flatten, fields: selectedFields?.join(','), filter, features, csvInferNumbers: csvInfer };
+    const apiOpts = toAnalyzeRequestOptions(analyzeOptions);
+    const opts = {
+      rulesJson,
+      flatten,
+      fields: selectedFields?.length ? selectedFields.join(',') : apiOpts.fields,
+      filter: filter || apiOpts.filter,
+      features,
+      csvInferNumbers: csvInfer,
+      ...apiOpts,
+      ...(selectedFields?.length ? { fields: selectedFields.join(',') } : {}),
+      ...(filter ? { filter } : {}),
+    };
     if (rulesJson) {
       try {
-        const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer });
+        const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer, ...toAnalyzeRequestOptions(analyzeOptions) });
         if (pf?.hasWarning) {
           setPreflightModal({ ruleFields: pf.ruleFields ?? [], sampleFields: pf.sampleFields ?? [], truncated: pf.truncatedSampleFieldCount ?? 0 });
           setPendingRun({ src, opts });
@@ -163,7 +186,7 @@ export default function Workbench() {
       } catch { /* ignore */ }
     }
     await executeAnalysis(src, opts);
-  }, [rules, features, csvInfer, executeAnalysis]);
+  }, [rules, features, csvInfer, executeAnalysis, analyzeOptions]);
 
   const confirmPreflight = () => {
     const pending = pendingRun;
@@ -306,6 +329,8 @@ export default function Workbench() {
       setPasteOpen={setPasteOpen}
       onSubmitPaste={submitPaste}
       defaultPasteFormat={textFormat}
+      analyzeOptions={analyzeOptions}
+      setAnalyzeOptions={setAnalyzeOptions}
     />
   );
 }
