@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 import { cn } from '../lib/cn.js';
+import VisualExpectations from './VisualExpectations.jsx';
 
 /** Supported FieldRule attributes (aligned with backend / RULES_TEMPLATE). */
 export const FIELD_ATTRS = [
@@ -100,14 +101,9 @@ function summaryOf(rule) {
   return bits.length ? bits.join(' · ') : '未配置属性';
 }
 
-/**
- * Visual editor for rules.fields — clickable attribute toggles per field.
- * Syncs with rules JSON text via text / setText.
- */
 export default function VisualFieldRules({ text, setText, busy }) {
   const parsed = useMemo(() => parseFieldsFromText(text), [text]);
   const parseError = parsed === null;
-
   const [expanded, setExpanded] = useState(null);
   const [newName, setNewName] = useState('');
   const [draftName, setDraftName] = useState('');
@@ -445,6 +441,8 @@ export default function VisualFieldRules({ text, setText, busy }) {
           })}
         </ul>
       )}
+
+      <VisualExpectations text={text} setText={setText} busy={busy} />
     </div>
   );
 }
