@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { cn } from '../lib/cn.js';
 import VisualExpectations from './VisualExpectations.jsx';
+import VisualValueParsers from './VisualValueParsers.jsx';
 import PiiMaskEditor from './PiiMaskEditor.jsx';
 import { parseFieldsFromText, writeFieldsIntoText, mergeFieldNamesIntoRulesText } from '../lib/fieldRules.js';
 export { mergeFieldNamesIntoRulesText };
@@ -23,7 +24,6 @@ const AES_MODES = ['', 'cbc', 'ecb'];
 const AES_PADDING = ['', 'pkcs7', 'none'];
 const KEY_FORMATS = ['', 'base64', 'hex'];
 
-/** Common field validation regex presets */
 const PATTERN_PRESETS = [
   { label: '邮箱', pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$' },
   { label: '中国手机号', pattern: '^1[3-9]\\d{9}$' },
@@ -221,7 +221,7 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        对齐后端 FieldRule：质量校验、transform（JWT/AES/SM4/SM2/Base64/URL）、PII 打码。修改实时写回 JSON。
+        对齐后端 FieldRule：质量校验、transform、PII、valueParsers、expectations。修改实时写回 JSON。
       </p>
 
       {sampleFields?.length ? (
@@ -288,34 +288,13 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
                           <span className="mb-1.5 block text-[11px] text-muted-foreground">正则 pattern</span>
                           <div className="mb-2 flex flex-wrap gap-1.5">
                             {PATTERN_PRESETS.map((preset) => (
-                              <button
-                                key={preset.label}
-                                type="button"
-                                disabled={busy}
-                                className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
-                                onClick={() => updateField(name, { ...rule, pattern: preset.pattern })}
-                              >
-                                {preset.label}
-                              </button>
+                              <button key={preset.label} type="button" disabled={busy} className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: preset.pattern })}>{preset.label}</button>
                             ))}
                             {rule.pattern ? (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                className="rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-danger/15 disabled:opacity-40"
-                                onClick={() => updateField(name, { ...rule, pattern: undefined })}
-                              >
-                                清除
-                              </button>
+                              <button type="button" disabled={busy} className="rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-danger/15 disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: undefined })}>清除</button>
                             ) : null}
                           </div>
-                          <input
-                            className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-xs outline-none focus:border-primary/40"
-                            placeholder="点击上方预设，或手写正则"
-                            disabled={busy}
-                            value={rule.pattern ?? ''}
-                            onChange={(e) => updateField(name, { ...rule, pattern: e.target.value || undefined })}
-                          />
+                          <input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-xs outline-none focus:border-primary/40" placeholder="点击上方预设，或手写正则" disabled={busy} value={rule.pattern ?? ''} onChange={(e) => updateField(name, { ...rule, pattern: e.target.value || undefined })} />
                         </div>
                       </div>
                       <div className="mt-2 rounded-lg border border-border bg-background p-3">
@@ -370,13 +349,7 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
 
                     <div>
                       <div className="mb-2 text-xs font-medium text-muted-foreground">PII / 打码</div>
-                      <PiiMaskEditor
-                        pii={pii}
-                        busy={busy}
-                        redact={rule.redact}
-                        onChange={(nextPii) => updateField(name, { ...rule, _pii: nextPii })}
-                        onRedactChange={(v) => updateField(name, { ...rule, redact: v })}
-                      />
+                      <PiiMaskEditor pii={pii} busy={busy} redact={rule.redact} onChange={(nextPii) => updateField(name, { ...rule, _pii: nextPii })} onRedactChange={(v) => updateField(name, { ...rule, redact: v })} />
                     </div>
                   </div>
                 ) : null}
@@ -386,6 +359,7 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
         </ul>
       )}
 
+      <VisualValueParsers text={text} setText={setText} busy={busy} />
       <VisualExpectations text={text} setText={setText} busy={busy} />
     </div>
   );
