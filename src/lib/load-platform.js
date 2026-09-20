@@ -15,9 +15,11 @@ import {
   normalizeSnapshot,
   normalizeTrendPoint,
   dimsFromQuality,
+} from './normalize.js';
+import {
   extractDashboard,
   extractIssuesFromResponse,
-} from './normalize.js';
+} from './normalize-extract.js';
 import {
   SEED_ALERTS,
   SEED_BASELINES,
