@@ -67,6 +67,7 @@ export default function Workbench() {
   const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
   const [forceAsync, setForceAsync] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [sidebarW, setSidebarW] = useState(() => {
     const saved = Number(localStorage.getItem('wbSidebarW'));
@@ -205,12 +206,13 @@ export default function Workbench() {
     setSource(src); setFileName(file.name); setError('');
     await runAnalysis(src, rulesText);
   };
-  const onPaste = async () => {
-    const text = window.prompt('粘贴数据内容（JSON / JSONL / CSV / YAML / XML）：');
-    if (!text) return;
-    const name = `粘贴的数据（${textFormat}）`;
+  const openPaste = () => setPasteOpen(true);
+  const submitPaste = async (text, format) => {
+    const fmt = format || textFormat || 'json';
+    setTextFormat(fmt);
+    const name = `粘贴的数据（${fmt}）`;
     setFileName(name); setError('');
-    const file = new File([text], `pasted.${textFormat}`, { type: 'text/plain' });
+    const file = new File([text], `pasted.${fmt}`, { type: 'text/plain' });
     const src = { file, name }; setSource(src);
     await runAnalysis(src, rulesText);
   };
@@ -258,9 +260,7 @@ export default function Workbench() {
       error={error}
       fileInput={fileInput}
       onFile={onFile}
-      textFormat={textFormat}
-      setTextFormat={setTextFormat}
-      onPaste={onPaste}
+      onPaste={openPaste}
       loadSample={loadSample}
       source={source}
       runAnalysis={runAnalysis}
@@ -302,6 +302,10 @@ export default function Workbench() {
       toggleFeature={toggleFeature}
       configOpen={configOpen}
       setConfigOpen={setConfigOpen}
+      pasteOpen={pasteOpen}
+      setPasteOpen={setPasteOpen}
+      onSubmitPaste={submitPaste}
+      defaultPasteFormat={textFormat}
     />
   );
 }
