@@ -8,11 +8,13 @@ import QualityPanel from '../components/QualityPanel.jsx';
 import InsightsPanel from '../components/InsightsPanel.jsx';
 import ErrorBoundary from '../components/ErrorBoundary.jsx';
 import RulesRuntimeSection from '../components/RulesRuntimeSection.jsx';
+import PasteDataModal from '../components/PasteDataModal.jsx';
 
 /** Presentational layout for analysis workbench */
 export default function WorkbenchLayout({
   busy, sidebarW, onResizeStart,
-  fileName, error, fileInput, onFile, textFormat, setTextFormat, onPaste, loadSample,
+  fileName, error, fileInput, onFile, onPaste, loadSample,
+  pasteOpen, setPasteOpen, onSubmitPaste, defaultPasteFormat,
   source, runAnalysis, rulesText, cancelAnalysis,
   phase, progress, jobId, asyncError, forceAsync, setForceAsync,
   result, elapsed, exportOpen, setExportOpen, exportReport, kb,
@@ -37,12 +39,7 @@ export default function WorkbenchLayout({
             <div className="grid gap-2">
               <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40" onClick={() => fileInput.current?.click()} disabled={busy}>上传文件</button>
               <input ref={fileInput} type="file" className="hidden" accept=".json,.jsonl,.txt,.csv,.xml,.yaml,.yml,.xlsx,.xls,.gz,.zip" onChange={onFile} />
-              <div className="flex gap-2">
-                <select className="h-10 flex-1 rounded-lg bg-muted px-2 text-sm shadow-[var(--elev)] outline-none" value={textFormat} onChange={(e) => setTextFormat(e.target.value)} disabled={busy}>
-                  {['json','jsonl','csv','yaml','xml'].map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
-                </select>
-                <button type="button" className="h-10 rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40" onClick={onPaste} disabled={busy}>粘贴</button>
-              </div>
+              <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40" onClick={onPaste} disabled={busy}>粘贴数据</button>
               <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={loadSample} disabled={busy}>加载样例数据</button>
               <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={() => source && runAnalysis(source, rulesText)} disabled={busy || !source}>重新分析</button>
             </div>
@@ -132,6 +129,15 @@ export default function WorkbenchLayout({
           </div>
         ) : null}
       </main>
+      {pasteOpen ? (
+        <PasteDataModal
+          open={pasteOpen}
+          onClose={() => setPasteOpen?.(false)}
+          onSubmit={onSubmitPaste}
+          busy={busy}
+          defaultFormat={defaultPasteFormat || 'json'}
+        />
+      ) : null}
       {preflightModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-[var(--elev)]">
