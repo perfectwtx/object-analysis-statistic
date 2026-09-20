@@ -2,10 +2,8 @@ import { useMemo } from 'react';
 import { parseJsonc } from '../utils.js';
 
 const EXPECTATION_DEFS = [
-  { key: 'minRowCount', label: '最少行数', hint: '对象/行数量下限', placeholder: '3' },
-  { key: 'maxRowCount', label: '最多行数', hint: '对象/行数量上限', placeholder: '可选' },
-  { key: 'maxDuplicateRate', label: '最大重复率', hint: '0–1，超过则违规', placeholder: '0' },
-  { key: 'minCoverage', label: '最小覆盖率', hint: '全局覆盖率下限 0–1', placeholder: '可选' },
+  { key: 'minRowCount', label: '最少行数 minRowCount', hint: '总行数低于该值违规', placeholder: '3' },
+  { key: 'maxDuplicateRate', label: '最大重复率 maxDuplicateRate', hint: '0–1，完全相同对象占比上限', placeholder: '0' },
 ];
 
 function parseExpectations(text) {
@@ -39,7 +37,6 @@ function writeExpectationsIntoText(text, expectations) {
   return `${JSON.stringify(obj, null, 2)}\n`;
 }
 
-/** Dataset-level expectations editor (rules.expectations). */
 export default function VisualExpectations({ text, setText, busy }) {
   const expectations = useMemo(() => parseExpectations(text), [text]);
 
@@ -47,7 +44,7 @@ export default function VisualExpectations({ text, setText, busy }) {
     <section className="rounded-xl border border-border bg-muted/20 p-3">
       <h3 className="text-sm font-medium">数据集期望 expectations</h3>
       <p className="mt-1 text-[11px] text-muted-foreground">
-        写入规则 JSON 的 expectations 节点，分析后由后端校验整份数据。
+        仅支持后端 AnalysisExpectations：minRowCount、maxDuplicateRate。
       </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {EXPECTATION_DEFS.map((d) => (
