@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from './ui/modal.jsx';
 import RulesEditor, { RULES_TEMPLATE } from './RulesEditor.jsx';
+import VisualFieldRules from './VisualFieldRules.jsx';
 import { parseJsonc } from '../utils.js';
 import { cn } from '../lib/cn.js';
 
@@ -62,6 +63,7 @@ export default function RulesConfigModal({
   onToggleFeature,
 }) {
   const [tab, setTab] = useState('runtime');
+  const [rulesMode, setRulesMode] = useState('visual'); // visual | json
   const [flatten, setFlatten] = useState(true);
 
   useEffect(() => {
@@ -117,7 +119,7 @@ export default function RulesConfigModal({
       open={open}
       onClose={onClose}
       title="规则与运行配置"
-      description="配置分析 runtime、字段规则 JSON，以及深度分析特征开关。"
+      description="配置分析 runtime、字段规则（可视化或 JSON），以及深度分析特征开关。"
       size="xl"
       footer={footer}
     >
@@ -156,28 +158,27 @@ export default function RulesConfigModal({
                 onChange={(e) => patchFlatten(e.target.checked)}
               />
               <span>
-                <span className="text-sm">Flatten 嵌套对象</span>
+                <span className="text-sm">展开嵌套对象 (flatten)</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  开启后将嵌套字段展开为点号路径（如 address.city）。
+                  将嵌套字段展平为点路径，便于按字段写规则。
                 </span>
               </span>
             </label>
           </section>
 
           <section className="rounded-xl border border-border bg-muted/30 p-4">
-            <h3 className="text-sm font-medium">执行选项</h3>
-            <p className="mt-1 text-xs text-muted-foreground">影响 API 调用方式，不写入规则文件。</p>
-            <div className="mt-4 space-y-3">
+            <h3 className="text-sm font-medium">请求行为</h3>
+            <div className="mt-3 space-y-3">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
                   className="mt-0.5 size-4 rounded border-border"
                   checked={!!csvInfer}
                   disabled={busy}
-                  onChange={onToggleCsvInfer}
+                  onChange={() => onToggleCsvInfer?.()}
                 />
                 <span>
-                  <span className="text-sm">CSV 数值推断</span>
+                  <span className="text-sm">CSV 数字推断</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     将可解析为数字的 CSV 单元格推断为 Number。
                   </span>
@@ -204,18 +205,49 @@ export default function RulesConfigModal({
       ) : null}
 
       {tab === 'rules' ? (
-        <RulesEditor
-          text={rulesText}
-          setText={setRulesText}
-          error={rulesError}
-          check={rulesCheck}
-          onValidate={onValidate}
-          onApply={onApply}
-          onClear={onClear}
-          onFetchReference={onFetchReference}
-          applied={applied}
-          busy={busy}
-        />
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="inline-flex rounded-full bg-muted p-0.5 shadow-[var(--elev)]">
+              {[
+                { key: 'visual', label: '可视化' },
+                { key: 'json', label: 'JSON' },
+              ].map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    rulesMode === m.key
+                      ? 'bg-card text-foreground shadow-[var(--elev)]'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => setRulesMode(m.key)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {rulesMode === 'visual' ? '点选字段属性，自动同步 JSON' : '直接编辑完整规则文档'}
+            </p>
+          </div>
+          {rulesMode === 'visual' ? (
+            <VisualFieldRules text={rulesText} setText={setRulesText} busy={busy} />
+          ) : (
+            <RulesEditor
+              text={rulesText}
+              setText={setRulesText}
+              error={rulesError}
+              check={rulesCheck}
+              onValidate={onValidate}
+              onApply={onApply}
+              onClear={onClear}
+              onFetchReference={onFetchReference}
+              applied={applied}
+              busy={busy}
+            />
+          )}
+        </div>
       ) : null}
 
       {tab === 'features' ? (
