@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from './ui/modal.jsx';
-import RulesEditor, { RULES_TEMPLATE } from './RulesEditor.jsx';
+import RulesEditor, { RULES_TEMPLATE, EMPTY_RULES } from './RulesEditor.jsx';
 import VisualFieldRules from './VisualFieldRules.jsx';
 import { parseJsonc } from '../utils.js';
 import { cn } from '../lib/cn.js';
@@ -96,10 +96,18 @@ export default function RulesConfigModal({
     setRulesText((prev) => writeRuntimeIntoRulesText(prev || RULES_TEMPLATE, { flatten: next }));
   };
 
+  const clearAllRules = () => {
+    if (!window.confirm('确定清空所有规则（fields / valueParsers / expectations）？将保留 runtime.flatten。')) return;
+    const next = writeRuntimeIntoRulesText(EMPTY_RULES, { flatten });
+    setRulesText(next);
+    onClear?.();
+  };
+
   const footer = (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-[11px] text-muted-foreground line-clamp-1">{appliedSummary}</p>
       <div className="flex gap-2">
+        <button type="button" className="h-9 rounded-lg px-3 text-sm text-danger hover:bg-danger/10 disabled:opacity-40" disabled={busy} onClick={clearAllRules}>清空规则</button>
         <button type="button" className="h-9 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted" onClick={onClose}>关闭</button>
         <button type="button" className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40" disabled={busy} onClick={async () => { await onApply?.(); onClose?.(); }}>应用并关闭</button>
       </div>
@@ -171,7 +179,17 @@ export default function RulesConfigModal({
                 <button key={m.key} type="button" className={cn('rounded-full px-3 py-1 text-xs font-medium transition-colors', rulesMode === m.key ? 'bg-card text-foreground shadow-[var(--elev)]' : 'text-muted-foreground hover:text-foreground')} onClick={() => setRulesMode(m.key)}>{m.label}</button>
               ))}
             </div>
-            <p className="text-[11px] text-muted-foreground">{rulesMode === 'visual' ? '点选字段属性，自动同步 JSON' : '直接编辑完整规则文档'}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] text-muted-foreground">{rulesMode === 'visual' ? '点选字段属性，自动同步 JSON' : '直接编辑完整规则文档'}</p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={clearAllRules}
+                className="h-8 rounded-lg border border-danger/30 px-2.5 text-xs font-medium text-danger hover:bg-danger/10 disabled:opacity-40"
+              >
+                清空所有规则
+              </button>
+            </div>
           </div>
           {rulesMode === 'visual' ? (
             <VisualFieldRules text={rulesText} setText={setRulesText} busy={busy} sampleFields={sampleFields} />
