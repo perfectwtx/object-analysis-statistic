@@ -26,6 +26,7 @@ export default function RulesRuntimeSection({
   setConfigOpen,
   analyzeOptions,
   setAnalyzeOptions,
+  sampleFields,
 }) {
   return (
     <>
@@ -63,6 +64,9 @@ export default function RulesRuntimeSection({
             ) : null}
             {analyzeOptions?.rootPath ? (
               <span className="rounded-full bg-muted px-2 py-0.5">rootPath</span>
+            ) : null}
+            {sampleFields?.length ? (
+              <span className="rounded-full bg-muted px-2 py-0.5">{sampleFields.length} 样本字段</span>
             ) : null}
           </div>
           {rulesError ? <div className="mt-2 text-danger">{rulesError}</div> : null}
@@ -113,6 +117,7 @@ export default function RulesRuntimeSection({
         onToggleFeature={toggleFeature}
         analyzeOptions={analyzeOptions}
         setAnalyzeOptions={setAnalyzeOptions}
+        sampleFields={sampleFields}
       />
     </>
   );
