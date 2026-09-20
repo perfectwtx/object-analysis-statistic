@@ -16,6 +16,7 @@ import {
   saveAnalyzeOptions,
   toAnalyzeRequestOptions,
 } from '../lib/analyzeOptions.js';
+import { mergeFieldNamesIntoRulesText } from '../components/VisualFieldRules.jsx';
 
 const TABS = [
   { key: 'fields', label: '字段明细' },
@@ -80,6 +81,7 @@ export default function Workbench() {
   };
   const [configOpen, setConfigOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [lastSampleFields, setLastSampleFields] = useState([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [sidebarW, setSidebarW] = useState(() => {
     const saved = Number(localStorage.getItem('wbSidebarW'));
@@ -97,6 +99,11 @@ export default function Workbench() {
       setResult(asyncResult);
       setElapsed(asyncResult._api?.elapsedMs ?? null);
       setError('');
+      const names = (asyncResult.fieldStatistics || []).map((f) => f.fieldName).filter(Boolean);
+      if (names.length) {
+        setLastSampleFields(names);
+        setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, names));
+      }
     }
   }, [phase, asyncResult]);
 
@@ -178,8 +185,13 @@ export default function Workbench() {
     if (rulesJson) {
       try {
         const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer, ...toAnalyzeRequestOptions(analyzeOptions) });
+        const sample = pf?.sampleFields ?? pf?.SampleFields ?? [];
+        if (Array.isArray(sample) && sample.length) {
+          setLastSampleFields(sample);
+          setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, sample));
+        }
         if (pf?.hasWarning) {
-          setPreflightModal({ ruleFields: pf.ruleFields ?? [], sampleFields: pf.sampleFields ?? [], truncated: pf.truncatedSampleFieldCount ?? 0 });
+          setPreflightModal({ ruleFields: pf.ruleFields ?? [], sampleFields: sample, truncated: pf.truncatedSampleFieldCount ?? 0 });
           setPendingRun({ src, opts });
           return;
         }
@@ -194,6 +206,10 @@ export default function Workbench() {
     if (pending) executeAnalysis(pending.src, pending.opts);
   };
   const cancelPreflight = () => { setPreflightModal(null); setPendingRun(null); };
+  const onImportSampleFields = () => {
+    if (!lastSampleFields?.length) return;
+    setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, lastSampleFields));
+  };
 
   const checkRules = useCallback(async (text) => {
     if (!text?.trim()) { setRulesCheck(null); return { ok: true, empty: true }; }
@@ -331,6 +347,8 @@ export default function Workbench() {
       defaultPasteFormat={textFormat}
       analyzeOptions={analyzeOptions}
       setAnalyzeOptions={setAnalyzeOptions}
+      sampleFields={lastSampleFields}
+      onImportSampleFields={onImportSampleFields}
     />
   );
 }
