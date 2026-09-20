@@ -16,7 +16,7 @@ import {
   saveAnalyzeOptions,
   toAnalyzeRequestOptions,
 } from '../lib/analyzeOptions.js';
-import { mergeFieldNamesIntoRulesText } from '../components/VisualFieldRules.jsx';
+import { mergeFieldNamesIntoRulesText } from '../lib/fieldRules.js';
 
 const TABS = [
   { key: 'fields', label: '字段明细' },
