@@ -1,6 +1,11 @@
 import { useRef, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 
+export const EMPTY_RULES = `{
+  "runtime": { "flatten": true },
+  "fields": {}
+}`;
+
 export const RULES_TEMPLATE = `{\n  // 全局运行配置放在 runtime 下（旧版的顶层 flatten 已迁入 runtime.flatten）\n  "runtime": {\n    "flatten": true\n  },\n\n  "fields": {\n    "gender": { "enumValues": ["Male", "Female", "Unknown"] },\n    "age": { "required": true, "minValue": 0, "maxValue": 120 },\n    "email": { "pattern": "\\\\S+@\\\\S+", "required": true },\n    "id": { "unique": true },\n\n    /* nullRateMax：字段缺失 + 显式 null 都会计入，超过 20% 就报违规 */\n    "address.district": { "nullRateMax": 0.2 },\n\n    // transform.parse：先把字符串按 json / jwt / base64 / url 解开再统计，可多级串联\n    "line": { "transform": { "parse": "json" } },\n    "line.body": { "transform": { "parse": "json" } }\n  },\n\n  // Excel/CSV：指定列单元格按 JSON 解析后再统计\n  // "valueParsers": [\n  //   { "source": "payload", "parseType": "auto", "flatten": true, "header": 1 }\n  // ],\n\n  "expectations": { "minRowCount": 3, "maxDuplicateRate": 0 }\n}`;
 
 function UnknownList({ items, limit = 6 }) {
@@ -144,16 +149,18 @@ export default function RulesEditor({
       >
         {busy ? '分析中…' : '应用规则'}
       </button>
-      {applied ? (
-        <button
-          type="button"
-          className="inline-flex h-9 w-full items-center justify-center rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-          onClick={onClear}
-          disabled={busy}
-        >
-          清除规则
-        </button>
-      ) : null}
+      <button
+        type="button"
+        className="inline-flex h-9 w-full items-center justify-center rounded-lg text-sm text-danger hover:bg-danger/10 disabled:opacity-40"
+        onClick={() => {
+          if (!window.confirm('确定清空所有规则（fields / valueParsers / expectations）？')) return;
+          setText(EMPTY_RULES);
+          onClear?.();
+        }}
+        disabled={busy}
+      >
+        清空所有规则
+      </button>
 
       <details className="text-xs text-muted-foreground">
         <summary className="cursor-pointer select-none hover:text-foreground">支持的规则字段</summary>
