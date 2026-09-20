@@ -3,6 +3,7 @@ import {
   listIssues,
   listQualitySnapshots,
   getQualityTrend,
+  getQualityDashboard,
   listBaselines,
   listAlertRules,
 } from '../api/index.js';
@@ -14,6 +15,8 @@ import {
   normalizeSnapshot,
   normalizeTrendPoint,
   dimsFromQuality,
+  extractDashboard,
+  extractIssuesFromResponse,
 } from './normalize.js';
 import {
   SEED_ALERTS,
@@ -30,41 +33,71 @@ export async function loadPlatformOverview() {
   const backendOk = !!health.ok;
 
   try {
-    const [jr, ir, sr, tr] = await Promise.all([
+    const [jr, ir, sr, tr, dr] = await Promise.all([
       listJobs({ limit: 20 }),
       listIssues({ limit: 50 }),
       listQualitySnapshots({ limit: 20 }),
       getQualityTrend({ days: 30 }),
+      getQualityDashboard(),
     ]);
 
     const anyApi =
-      !jr.unavailable || !ir.unavailable || !sr.unavailable || !tr.unavailable;
+      !jr.unavailable ||
+      !ir.unavailable ||
+      !sr.unavailable ||
+      !tr.unavailable ||
+      !dr.unavailable;
 
     if (!anyApi && !backendOk) {
       return demoPayload('后端未连接，显示演示数据');
     }
 
-    const jobs = asList(jr.data).map(normalizeJob).filter(Boolean);
-    const issues = asList(ir.data).map(normalizeIssue).filter(Boolean);
-    const snapshots = asList(sr.data).map(normalizeSnapshot).filter(Boolean);
+    let jobs = asList(jr.data).map(normalizeJob).filter(Boolean);
+
+    const issuePack = extractIssuesFromResponse(ir.unavailable ? null : ir.data);
+    let issues = issuePack.issues;
+    if (!issues.length && !ir.unavailable) {
+      issues = asList(ir.data).map(normalizeIssue).filter(Boolean);
+    }
+    if (issuePack.jobs.length && !jobs.length) jobs = issuePack.jobs;
+
+    let snapshots = asList(sr.data).map(normalizeSnapshot).filter(Boolean);
     let trend = asList(tr.data).map(normalizeTrendPoint).filter((p) => p && p.day);
 
-    const latestSnap = snapshots[0];
-    const latestJob = jobs[0];
-    let dims = latestSnap?.dims || null;
-    if (dims && Object.values(dims).every((v) => v == null)) dims = null;
-    if (!dims && latestSnap?.raw) dims = dimsFromQuality(latestSnap.raw);
-    if (!dims) dims = { ...SEED_DIMS };
+    const dash = !dr.unavailable ? extractDashboard(dr.data) : null;
+    if (dash?.snapshots?.length && !snapshots.length) snapshots = dash.snapshots;
+    if (dash?.topIssues?.length && !issues.length) issues = dash.topIssues;
+    if (dash?.job && !jobs.find((j) => j.id === dash.job.id)) {
+      jobs = [dash.job, ...jobs];
+    }
 
+    let dims = dash?.dims || null;
+    if (!dims) {
+      const latestSnap = snapshots[0];
+      dims = latestSnap?.dims || null;
+      if (dims && Object.values(dims).every((v) => v == null)) dims = null;
+      if (!dims && latestSnap?.raw) dims = dimsFromQuality(latestSnap.raw);
+    }
+    if (!dims) dims = { ...SEED_DIMS };
     for (const k of Object.keys(SEED_DIMS)) {
       if (dims[k] == null) dims[k] = SEED_DIMS[k];
     }
 
     const score =
-      latestSnap?.overallScore ??
-      latestJob?.score ??
+      dash?.score ??
+      snapshots[0]?.overallScore ??
+      jobs[0]?.score ??
       averageDims(dims);
 
+    if (!trend.length && snapshots.length) {
+      trend = snapshots
+        .map((s) => ({
+          day: (s.createdAt || '').slice(0, 10) || s.sourceName || '',
+          score: s.overallScore,
+        }))
+        .filter((p) => p.day && p.score != null)
+        .reverse();
+    }
     if (!trend.length) trend = buildTrend();
 
     const br = await listBaselines().catch(() => ({ unavailable: true, data: null }));
@@ -74,7 +107,7 @@ export async function loadPlatformOverview() {
       : asList(br.data).map((b) => ({
           id: b.id || b.Id || b.sourceName,
           name: b.name || b.Name || b.sourceName || '基线',
-          score: Number(b.minOverall ?? b.score ?? b.Score ?? 0),
+          score: Number(b.minOverallScore ?? b.minOverall ?? b.score ?? b.Score ?? 0),
           jobId: b.jobId || b.JobId,
         }));
     const alerts = ar.unavailable
@@ -91,7 +124,7 @@ export async function loadPlatformOverview() {
       source: anyApi || backendOk ? 'api' : 'demo',
       backendOk,
       jobs: jobs.length ? jobs : SEED_JOBS,
-      issues: issues.length ? issues : (anyApi ? [] : SEED_ISSUES),
+      issues: issues.length ? issues : anyApi ? [] : SEED_ISSUES,
       dims,
       score,
       trend,
