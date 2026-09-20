@@ -10,6 +10,7 @@ import {
 } from '../components/ui/data-table.jsx';
 import { SEED_FIELDS } from '../lib/mock-data.js';
 import { asList, normalizeField, normalizeJob } from '../lib/normalize.js';
+import { extractFieldsFromResponse } from '../lib/normalize-extract.js';
 import { cn, formatPct } from '../lib/cn.js';
 import { useT } from '../lib/i18n.js';
 
@@ -44,8 +45,8 @@ export default function FieldQuality() {
         if (r.unavailable) { setSource('demo'); setFields(SEED_FIELDS); }
         else {
           setSource('api');
-          const list = asList(r.data).map(normalizeField).filter(Boolean);
-          setFields(list.length ? list : SEED_FIELDS);
+          const list = extractFieldsFromResponse(r.data);
+          setFields(list.length ? list : []);
         }
       } catch (e) { setError(e.message); setSource('demo'); setFields(SEED_FIELDS); }
       finally { setLoading(false); }
