@@ -1,28 +1,7 @@
 import { useRef, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 
-export const RULES_TEMPLATE = `{
-  // 全局运行配置放在 runtime 下（旧版的顶层 flatten 已迁入 runtime.flatten）
-  "runtime": {
-    "flatten": true
-  },
-
-  "fields": {
-    "gender": { "enumValues": ["Male", "Female", "Unknown"] },
-    "age": { "required": true, "minValue": 0, "maxValue": 120 },
-    "email": { "pattern": "\\\\S+@\\\\S+", "required": true },
-    "id": { "unique": true },
-
-    /* nullRateMax：字段缺失 + 显式 null 都会计入，超过 20% 就报违规 */
-    "address.district": { "nullRateMax": 0.2 },
-
-    // transform.parse：先把字符串按 json / jwt / base64 / url 解开再统计，可多级串联
-    "line": { "transform": { "parse": "json" } },
-    "line.body": { "transform": { "parse": "json" } }
-  },
-
-  "expectations": { "minRowCount": 3, "maxDuplicateRate": 0 }
-}`;
+export const RULES_TEMPLATE = `{\n  // 全局运行配置放在 runtime 下（旧版的顶层 flatten 已迁入 runtime.flatten）\n  "runtime": {\n    "flatten": true\n  },\n\n  "fields": {\n    "gender": { "enumValues": ["Male", "Female", "Unknown"] },\n    "age": { "required": true, "minValue": 0, "maxValue": 120 },\n    "email": { "pattern": "\\\\S+@\\\\S+", "required": true },\n    "id": { "unique": true },\n\n    /* nullRateMax：字段缺失 + 显式 null 都会计入，超过 20% 就报违规 */\n    "address.district": { "nullRateMax": 0.2 },\n\n    // transform.parse：先把字符串按 json / jwt / base64 / url 解开再统计，可多级串联\n    "line": { "transform": { "parse": "json" } },\n    "line.body": { "transform": { "parse": "json" } }\n  },\n\n  // Excel/CSV：指定列单元格按 JSON 解析后再统计\n  // "valueParsers": [\n  //   { "source": "payload", "parseType": "auto", "flatten": true, "header": 1 }\n  // ],\n\n  "expectations": { "minRowCount": 3, "maxDuplicateRate": 0 }\n}`;
 
 function UnknownList({ items, limit = 6 }) {
   return (
@@ -184,6 +163,8 @@ export default function RulesEditor({
           <li><code className="text-foreground/80">enumValues</code> / <code className="text-foreground/80">required</code> / <code className="text-foreground/80">unique</code></li>
           <li><code className="text-foreground/80">minValue / maxValue</code> / <code className="text-foreground/80">pattern</code></li>
           <li><code className="text-foreground/80">nullRateMax</code> / <code className="text-foreground/80">expectations</code></li>
+          <li><code className="text-foreground/80">valueParsers</code> Excel/CSV 列内 JSON 解析</li>
+          <li><code className="text-foreground/80">pii</code> / <code className="text-foreground/80">redact</code> / <code className="text-foreground/80">transform</code>（加解密）</li>
         </ul>
       </details>
     </div>
