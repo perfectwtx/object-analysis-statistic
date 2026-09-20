@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 import { cn } from '../lib/cn.js';
 
@@ -20,13 +20,14 @@ function parseValueParsers(text) {
       source: item?.source != null ? String(item.source) : '',
       parseType: item?.parseType || 'auto',
       flatten: item?.flatten,
-      header: item?.header,
+      header: item?.header ?? 1,
     }));
   } catch {
     return [];
   }
 }
 
+/** Persist rows; keep empty-source drafts so UI can show them while editing. */
 function writeValueParsersIntoText(text, list) {
   let obj;
   try {
@@ -36,22 +37,19 @@ function writeValueParsersIntoText(text, list) {
   }
   if (!obj || typeof obj !== 'object') obj = {};
 
-  const cleaned = (list || [])
-    .map((row) => {
-      const source = String(row.source || '').trim();
-      if (!source) return null;
-      const entry = { source };
-      const pt = row.parseType || 'auto';
-      if (pt) entry.parseType = pt;
-      if (row.flatten === true) entry.flatten = true;
-      if (row.flatten === false) entry.flatten = false;
-      if (row.header !== '' && row.header != null && row.header !== undefined) {
-        const n = Number(row.header);
-        if (!Number.isNaN(n)) entry.header = n;
-      }
-      return entry;
-    })
-    .filter(Boolean);
+  const cleaned = (list || []).map((row) => {
+    const entry = {
+      source: String(row.source ?? '').trim(),
+      parseType: row.parseType || 'auto',
+    };
+    if (row.flatten === true) entry.flatten = true;
+    if (row.flatten === false) entry.flatten = false;
+    if (row.header !== '' && row.header != null && row.header !== undefined) {
+      const n = Number(row.header);
+      if (!Number.isNaN(n)) entry.header = n;
+    }
+    return entry;
+  });
 
   if (cleaned.length) obj.valueParsers = cleaned;
   else delete obj.valueParsers;
@@ -59,14 +57,20 @@ function writeValueParsersIntoText(text, list) {
   return `${JSON.stringify(obj, null, 2)}\n`;
 }
 
-/**
- * Visual editor for top-level valueParsers[] —
- * Excel/CSV columns whose cell text should be parsed as JSON (or kept as string).
- */
 export default function VisualValueParsers({ text, setText, busy }) {
-  const rows = useMemo(() => parseValueParsers(text), [text]);
+  const fromText = useMemo(() => parseValueParsers(text), [text]);
+  // Local overlay so "添加列" is visible immediately even before source is filled
+  const [rows, setRows] = useState(fromText);
 
-  const commit = (nextList) => setText?.(writeValueParsersIntoText(text, nextList));
+  // Sync from rules JSON when parent text changes (e.g. switch visual/JSON, import)
+  useEffect(() => {
+    setRows(fromText);
+  }, [fromText]);
+
+  const commit = (nextList) => {
+    setRows(nextList);
+    setText?.(writeValueParsersIntoText(text, nextList));
+  };
 
   const updateRow = (index, patch) => {
     const next = rows.map((r, i) => (i === index ? { ...r, ...patch } : r));
@@ -80,7 +84,13 @@ export default function VisualValueParsers({ text, setText, busy }) {
   const addRow = () => {
     commit([
       ...rows,
-      { source: '', parseType: 'auto', flatten: undefined, header: 1 },
+      {
+        _id: `draft-${Date.now()}`,
+        source: '',
+        parseType: 'auto',
+        flatten: undefined,
+        header: 1,
+      },
     ]);
   };
 
@@ -90,7 +100,7 @@ export default function VisualValueParsers({ text, setText, busy }) {
         <div>
           <h3 className="text-sm font-medium">值解析器 valueParsers</h3>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            仅对 Excel / CSV 生效：把指定列的单元格按 JSON 解析后再统计。普通 JSON/JSONL/XML/YAML 配置了也不会改写解析器。
+            仅对 Excel / CSV 生效：把指定列的单元格按 JSON 解析后再统计。先点「添加列」，再填写 source 列名。
           </p>
         </div>
         <button
@@ -105,17 +115,22 @@ export default function VisualValueParsers({ text, setText, busy }) {
 
       {rows.length === 0 ? (
         <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-          未配置。适合「某一列整格是 JSON 字符串」的表格场景。
+          未配置。点击右上角「添加列」开始。适合「某一列整格是 JSON 字符串」的表格场景。
         </div>
       ) : (
         <ul className="mt-3 space-y-3">
           {rows.map((row, index) => (
             <li
-              key={row._id || index}
+              key={row._id || `row-${index}`}
               className="rounded-xl border border-border bg-background p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted-foreground">列 #{index + 1}</span>
+                <span className="text-xs font-medium text-muted-foreground">
+                  列 #{index + 1}
+                  {!String(row.source || '').trim() ? (
+                    <span className="ml-2 text-warn">请填写 source</span>
+                  ) : null}
+                </span>
                 <button
                   type="button"
                   disabled={busy}
@@ -133,7 +148,7 @@ export default function VisualValueParsers({ text, setText, busy }) {
                   </span>
                   <input
                     className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-sm outline-none focus:border-primary/40"
-                    placeholder="header≥1 用表头标题；header=0 用列字母如 B"
+                    placeholder="header≥1 用表头标题，如 payload；header=0 用列字母如 B"
                     disabled={busy}
                     value={row.source}
                     onChange={(e) => updateRow(index, { source: e.target.value })}
