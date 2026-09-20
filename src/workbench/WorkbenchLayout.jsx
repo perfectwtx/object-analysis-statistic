@@ -25,6 +25,8 @@ export default function WorkbenchLayout({
   setRulesText, csvInfer, toggleCsvInfer, FEATURE_DEFS, toggleFeature,
   configOpen, setConfigOpen,
   analyzeOptions, setAnalyzeOptions,
+  sampleFields,
+  onImportSampleFields,
 }) {
   return (
     <div className={`flex h-[calc(100dvh-57px)] min-h-[480px] overflow-hidden bg-background${busy ? ' select-none' : ''}`}>
@@ -68,6 +70,7 @@ export default function WorkbenchLayout({
             setConfigOpen={setConfigOpen}
             analyzeOptions={analyzeOptions}
             setAnalyzeOptions={setAnalyzeOptions}
+            sampleFields={sampleFields}
           />
         </div>
       </aside>
@@ -133,20 +136,15 @@ export default function WorkbenchLayout({
         ) : null}
       </main>
       {pasteOpen ? (
-        <PasteDataModal
-          open={pasteOpen}
-          onClose={() => setPasteOpen?.(false)}
-          onSubmit={onSubmitPaste}
-          busy={busy}
-          defaultFormat={defaultPasteFormat || 'json'}
-        />
+        <PasteDataModal open={pasteOpen} onClose={() => setPasteOpen?.(false)} onSubmit={onSubmitPaste} busy={busy} defaultFormat={defaultPasteFormat || 'json'} />
       ) : null}
       {preflightModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-[var(--elev)]">
             <h3 className="text-base font-medium">规则与数据可能不匹配</h3>
             <p className="mt-2 text-sm text-muted-foreground">预检发现规则字段与样本数据重叠不足，确认仍要继续分析？</p>
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" className="h-9 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted" onClick={() => { onImportSampleFields?.(); cancelPreflight?.(); }}>用样本字段更新规则</button>
               <button type="button" className="h-9 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted" onClick={cancelPreflight}>取消并修改规则</button>
               <button type="button" className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground" onClick={confirmPreflight}>仍然继续分析</button>
             </div>
