@@ -5,6 +5,7 @@ import {
   preflight,
   validateRules,
   ASYNC_THRESHOLD_BYTES,
+  saveLastJobId,
 } from '../api/index.js';
 import { useAsyncAnalyze } from '../hooks/useAsyncAnalyze.js';
 import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from '../utils.js';
@@ -99,13 +100,14 @@ export default function Workbench() {
       setResult(asyncResult);
       setElapsed(asyncResult._api?.elapsedMs ?? null);
       setError('');
+      if (jobId) saveLastJobId(jobId);
       const names = (asyncResult.fieldStatistics || []).map((f) => f.fieldName).filter(Boolean);
       if (names.length) {
         setLastSampleFields(names);
         setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, names));
       }
     }
-  }, [phase, asyncResult]);
+  }, [phase, asyncResult, jobId]);
 
   useEffect(() => {
     if ((phase === 'error' || phase === 'cancelled') && asyncError) setError(asyncError);
