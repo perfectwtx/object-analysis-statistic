@@ -9,7 +9,7 @@ import {
 import { useAsyncAnalyze } from '../hooks/useAsyncAnalyze.js';
 import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from '../utils.js';
 import { SAMPLE_DATA } from '../sampleData.js';
-import { RULES_TEMPLATE } from '../components/RulesEditor.jsx';
+import { RULES_TEMPLATE, EMPTY_RULES } from '../components/RulesEditor.jsx';
 import WorkbenchLayout from './WorkbenchLayout.jsx';
 import {
   loadAnalyzeOptions,
@@ -235,6 +235,7 @@ export default function Workbench() {
   };
   const clearRules = () => {
     setRules(null); setRulesError(''); setRulesCheck(null);
+    setRulesText(EMPTY_RULES);
     if (source) runAnalysis(source, null);
   };
 
