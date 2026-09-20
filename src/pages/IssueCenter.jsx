@@ -10,6 +10,7 @@ import {
 } from '../components/ui/data-table.jsx';
 import { DIM_LABEL, SEVERITY_LABEL, SEED_ISSUES } from '../lib/mock-data.js';
 import { asList, normalizeIssue, normalizeJob } from '../lib/normalize.js';
+import { extractIssuesFromResponse } from '../lib/normalize-extract.js';
 import { cn } from '../lib/cn.js';
 import { useT } from '../lib/i18n.js';
 
@@ -30,7 +31,13 @@ export default function IssueCenter() {
       if (!jr.unavailable) setJobs(asList(jr.data).map(normalizeJob).filter(Boolean));
       const r = await listIssues({ jobId: jobFilter || undefined, limit: 200 });
       if (r.unavailable) { setSource('demo'); setIssues(SEED_ISSUES); }
-      else { setSource('api'); setIssues(asList(r.data).map(normalizeIssue).filter(Boolean)); }
+      else {
+        setSource('api');
+        const pack = extractIssuesFromResponse(r.data);
+        const list = pack.issues.length ? pack.issues : asList(r.data).map(normalizeIssue).filter(Boolean);
+        setIssues(list);
+        if (pack.jobs.length) setJobs(pack.jobs);
+      }
     } catch (e) { setError(e.message); setSource('demo'); setIssues(SEED_ISSUES); }
     finally { setLoading(false); }
   };
@@ -59,7 +66,9 @@ export default function IssueCenter() {
               onChange={(e) => setJobFilter(e.target.value)}
             >
               <option value="">{t('allJobs')}</option>
-              {jobs.map((j) => <option key={j.id} value={j.id}>{j.sourceName}</option>)}
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>{j.sourceName || j.id}</option>
+              ))}
             </select>
             <select
               className="h-9 rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] outline-none"
