@@ -1,18 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
 import { listJobs, loadLastJobId, saveLastJobId } from '../api/index.js';
-import PageHeader from '../components/ui/PageHeader.jsx';
+import { PageHeader } from '../components/layout/PageHeader.jsx';
+import { BackendStatus } from '../components/BackendStatus.jsx';
+import { Button, buttonVariants } from '../components/ui/button.jsx';
+import { Card } from '../components/ui/card.jsx';
 import LoadingBlock from '../components/ui/LoadingBlock.jsx';
 import ErrorBanner from '../components/ui/ErrorBanner.jsx';
-import ApiUnavailable from '../components/ui/ApiUnavailable.jsx';
-import EmptyState from '../components/ui/EmptyState.jsx';
+import { asList, normalizeJob } from '../lib/normalize.js';
+import { cn } from '../lib/cn.js';
+import { useT } from '../lib/i18n.js';
 
 export default function JobDependentPage({
-  title, subtitle, endpointTemplate, fetchByJobId, renderData,
+  title,
+  subtitle,
+  endpointTemplate,
+  fetchByJobId,
+  renderData,
+  emptyHint,
 }) {
+  const { t } = useT();
   const [jobs, setJobs] = useState([]);
   const [jobId, setJobId] = useState(() => loadLastJobId());
   const [manualId, setManualId] = useState(() => loadLastJobId());
-  const [loading, setLoading] = useState(true);
+  const [loadingJobs, setLoadingJobs] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
   const [unavailable, setUnavailable] = useState(false);
@@ -21,32 +33,36 @@ export default function JobDependentPage({
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
+      setLoadingJobs(true);
       try {
-        const r = await listJobs({ limit: 30 });
+        const r = await listJobs({ limit: 40 });
         if (r.unavailable) {
           setJobsUnavailable(true);
           const last = loadLastJobId();
-          if (last) setJobId(last);
+          if (last) {
+            setJobId(last);
+            setManualId(last);
+          }
         } else {
           setJobsUnavailable(false);
-          const list = Array.isArray(r.data) ? r.data : r.data?.items || r.data?.jobs || [];
+          const list = asList(r.data).map(normalizeJob).filter(Boolean);
           setJobs(list);
-          if (!jobId && list[0]) {
-            const id = list[0].id || list[0].Id || '';
-            setJobId(id);
-            setManualId(id);
-          }
+          setJobId((prev) => {
+            if (prev) return prev;
+            const id = list[0]?.id || loadLastJobId() || '';
+            if (id) setManualId(id);
+            return id;
+          });
         }
       } catch (e) {
         setError(e.message);
       } finally {
-        setLoading(false);
+        setLoadingJobs(false);
       }
     })();
   }, []);
 
-  const load = async (id = jobId) => {
+  const load = useCallback(async (id) => {
     if (!id || !fetchByJobId) return;
     setFetching(true);
     setError('');
@@ -66,11 +82,11 @@ export default function JobDependentPage({
     } finally {
       setFetching(false);
     }
-  };
+  }, [fetchByJobId]);
 
   useEffect(() => {
     if (jobId) load(jobId);
-  }, [jobId]);
+  }, [jobId, load]);
 
   const applyManual = () => {
     const id = manualId.trim();
@@ -80,63 +96,94 @@ export default function JobDependentPage({
   };
 
   return (
-    <div className="page">
+    <div>
       <PageHeader
         title={title}
         subtitle={subtitle}
         actions={
-          <div className="page-actions-row">
-            {!jobsUnavailable && jobs.length > 0 && (
-              <select
-                className="format-select"
-                value={jobId}
-                onChange={(e) => {
-                  setJobId(e.target.value);
-                  setManualId(e.target.value);
-                }}
-              >
-                <option value="">选择作业</option>
-                {jobs.map((j) => (
-                  <option key={j.id || j.Id} value={j.id || j.Id}>
-                    {j.sourceName || j.SourceName || j.id || j.Id}
-                  </option>
-                ))}
-              </select>
-            )}
-            <div className="job-manual-row">
-              <input
-                className="job-id-input mono"
-                placeholder="粘贴 JobId（异步分析返回）"
-                value={manualId}
-                onChange={(e) => setManualId(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyManual()}
-              />
-              <button type="button" className="btn" onClick={applyManual} disabled={!manualId.trim()}>
-                使用
-              </button>
-              <button type="button" className="btn" onClick={() => load(jobId)} disabled={!jobId || fetching}>
-                查询
-              </button>
-            </div>
-          </div>
+          <>
+            <BackendStatus />
+            <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
+              {t('goAnalyze') || '去分析'}
+            </Link>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!jobId || fetching}
+              onClick={() => load(jobId)}
+            >
+              <RefreshCw className={cn('size-3.5', fetching && 'animate-spin')} />
+              {t('refresh') || '刷新'}
+            </Button>
+          </>
         }
       />
-      <ErrorBanner message={error} onRetry={() => load(jobId)} />
-      {loading && <LoadingBlock />}
-      {!loading && jobsUnavailable && !jobId && (
-        <EmptyState
-          title="暂无作业列表"
-          description="后端可能尚未提供 GET /api/jobs。可先在「分析任务」完成异步分析，将返回的 JobId 粘贴到上方查询。"
-        />
-      )}
-      {fetching && <LoadingBlock label="查询中…" />}
+
+      <Card className="mb-4 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <label className="block min-w-[200px] flex-1">
+            <span className="mb-1 block text-xs text-muted-foreground">选择作业</span>
+            <select
+              className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary/40"
+              value={jobId}
+              disabled={loadingJobs || jobsUnavailable}
+              onChange={(e) => {
+                setJobId(e.target.value);
+                setManualId(e.target.value);
+              }}
+            >
+              <option value="">{jobsUnavailable ? '作业列表不可用' : '选择 Job…'}</option>
+              {jobs.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {(j.sourceName || j.id).slice(0, 48)} · {(j.status || '').toString()}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block min-w-[240px] flex-1">
+            <span className="mb-1 block text-xs text-muted-foreground">或粘贴 JobId</span>
+            <div className="flex gap-2">
+              <input
+                className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm outline-none focus:border-primary/40"
+                value={manualId}
+                onChange={(e) => setManualId(e.target.value)}
+                placeholder="guid / job id"
+              />
+              <Button size="sm" variant="secondary" onClick={applyManual}>
+                加载
+              </Button>
+            </div>
+          </label>
+        </div>
+        {endpointTemplate ? (
+          <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+            {(endpointTemplate || '').replace('{jobId}', jobId || '{jobId}')}
+          </p>
+        ) : null}
+      </Card>
+
+      {error ? <div className="mb-4"><ErrorBanner message={error} /></div> : null}
+      {fetching ? <LoadingBlock label="查询中…" /> : null}
+
       {!fetching && unavailable && (
-        <ApiUnavailable
-          feature={title}
-          endpoint={(endpointTemplate || '').replace('{jobId}', jobId || '{jobId}')}
-        />
+        <Card className="py-10 text-center text-sm text-muted-foreground">
+          <div className="font-medium text-foreground">接口暂不可用</div>
+          <p className="mt-1 text-xs">
+            {endpointTemplate
+              ? endpointTemplate.replace('{jobId}', jobId || '{jobId}')
+              : '请确认后端已开放对应端点'}
+          </p>
+          <p className="mt-2 text-xs">{emptyHint || '可先在「分析任务」完成一次异步分析，再将 JobId 粘贴到上方。'}</p>
+        </Card>
       )}
-      {!fetching && data && renderData?.(data)}
+
+      {!fetching && !unavailable && data != null && renderData?.(data, jobId)}
+
+      {!fetching && !unavailable && data == null && jobId && !error && (
+        <Card className="py-10 text-center text-sm text-muted-foreground">
+          {emptyHint || '暂无数据'}
+        </Card>
+      )}
     </div>
   );
 }
