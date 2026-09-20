@@ -24,6 +24,7 @@ export default function WorkbenchLayout({
   rulesError, rulesCheck, checkRules, applyRules, clearRules, fetchReference,
   setRulesText, csvInfer, toggleCsvInfer, FEATURE_DEFS, toggleFeature,
   configOpen, setConfigOpen,
+  analyzeOptions, setAnalyzeOptions,
 }) {
   return (
     <div className={`flex h-[calc(100dvh-57px)] min-h-[480px] overflow-hidden bg-background${busy ? ' select-none' : ''}`}>
@@ -65,6 +66,8 @@ export default function WorkbenchLayout({
             toggleFeature={toggleFeature}
             configOpen={configOpen}
             setConfigOpen={setConfigOpen}
+            analyzeOptions={analyzeOptions}
+            setAnalyzeOptions={setAnalyzeOptions}
           />
         </div>
       </aside>
