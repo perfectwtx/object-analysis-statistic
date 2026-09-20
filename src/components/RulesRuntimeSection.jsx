@@ -24,6 +24,8 @@ export default function RulesRuntimeSection({
   toggleFeature,
   configOpen,
   setConfigOpen,
+  analyzeOptions,
+  setAnalyzeOptions,
 }) {
   return (
     <>
@@ -38,14 +40,14 @@ export default function RulesRuntimeSection({
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
               <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" strokeLinecap="round" />
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
             </svg>
             配置
           </button>
         </div>
-        <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+        <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
           <div className="flex flex-wrap gap-1.5">
-            <span className={`rounded-full px-2 py-0.5 ${rules ? 'bg-ok/15 text-ok' : 'bg-muted text-muted-foreground'}`}>
+            <span className="rounded-full bg-muted px-2 py-0.5">
               {rules ? '规则已应用' : '未应用规则'}
             </span>
             <span className="rounded-full bg-muted px-2 py-0.5">
@@ -54,8 +56,14 @@ export default function RulesRuntimeSection({
             {csvInfer ? <span className="rounded-full bg-muted px-2 py-0.5">CSV 推断</span> : null}
             {forceAsync ? <span className="rounded-full bg-muted px-2 py-0.5">强制异步</span> : null}
             <span className="rounded-full bg-muted px-2 py-0.5">
-              {Object.values(features).filter(Boolean).length}/{featureDefs.length} 特征
+              {Object.values(features || {}).filter(Boolean).length}/{(featureDefs || []).length} 特征
             </span>
+            {analyzeOptions?.recordPath ? (
+              <span className="rounded-full bg-muted px-2 py-0.5">recordPath</span>
+            ) : null}
+            {analyzeOptions?.rootPath ? (
+              <span className="rounded-full bg-muted px-2 py-0.5">rootPath</span>
+            ) : null}
           </div>
           {rulesError ? <div className="mt-2 text-danger">{rulesError}</div> : null}
           {rulesCheck?.state === 'ok' ? <div className="mt-2 text-ok">校验通过</div> : null}
@@ -76,7 +84,7 @@ export default function RulesRuntimeSection({
             onClick={() => setConfigOpen(true)}
             disabled={busy}
           >
-            编辑 JSON
+            打开配置
           </button>
         </div>
         {busy ? (
@@ -103,6 +111,8 @@ export default function RulesRuntimeSection({
         features={features}
         featureDefs={featureDefs}
         onToggleFeature={toggleFeature}
+        analyzeOptions={analyzeOptions}
+        setAnalyzeOptions={setAnalyzeOptions}
       />
     </>
   );
