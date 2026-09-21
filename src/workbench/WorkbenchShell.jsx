@@ -9,7 +9,7 @@ import {
 } from '../api/index.js';
 import { useAsyncAnalyze } from '../hooks/useAsyncAnalyze.js';
 import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from '../utils.js';
-import { SAMPLE_DATA } from '../sampleData.js';
+import { SAMPLE_DATA, FULL_SAMPLE_DATA, FULL_RULES_TEXT } from '../sampleData.js';
 import { RULES_TEMPLATE, EMPTY_RULES } from '../components/RulesEditor.jsx';
 import WorkbenchLayout from './WorkbenchLayout.jsx';
 import {
@@ -264,6 +264,28 @@ export default function Workbench() {
     const src = { file, name: '内置样例数据' }; setSource(src);
     await runAnalysis(src, rulesText);
   };
+
+  /** 一键加载全量样例数据 + 全量规则，并立即分析 */
+  const loadFullSample = async () => {
+    setError('');
+    setRulesError('');
+    let parsed = null;
+    try {
+      parsed = parseJsonc(FULL_RULES_TEXT);
+    } catch (e) {
+      setRulesError(`全量规则解析失败：${e.message}`);
+      return;
+    }
+    setRulesText(FULL_RULES_TEXT);
+    setRules(parsed);
+    setRulesCheck({ state: 'ok', fields: Object.keys(parsed?.fields || {}).length });
+    setFileName('全量样例数据');
+    const file = new File([JSON.stringify(FULL_SAMPLE_DATA, null, 2)], 'full-sample.json', { type: 'application/json' });
+    const src = { file, name: '全量样例数据' };
+    setSource(src);
+    await runAnalysis(src, FULL_RULES_TEXT, parsed);
+  };
+
   const fetchReference = async () => {
     try {
       const ref = await fetchRulesReference();
@@ -304,6 +326,7 @@ export default function Workbench() {
       onFile={onFile}
       onPaste={openPaste}
       loadSample={loadSample}
+      loadFullSample={loadFullSample}
       source={source}
       runAnalysis={runAnalysis}
       rulesText={rulesText}
