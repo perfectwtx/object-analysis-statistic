@@ -16,13 +16,13 @@ export default function TypeChart({ fields }) {
 
   const data = top.map((f) => ({ name: f.fieldName, ...(f.typeCounts || {}) }));
   const types = [...new Set(data.flatMap((d) => Object.keys(d).filter((k) => k !== 'name')))];
-  const { bottom, height, angle } = labelLayout(data.map((d) => d.name));
+  const { bottom, height, angle, left } = labelLayout(data.map((d) => d.name));
 
   return (
     <div>
       <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('typeChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: 0 }}>
+        <BarChart data={data} margin={{ top: 8, right: 12, bottom, left: Math.max(left || 0, 8) }}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
           <XAxis
             dataKey="name"

@@ -16,13 +16,13 @@ export default function CoverageChart({ fields }) {
     name: f.fieldName,
     覆盖率: +((f.coverage ?? 0) * 100).toFixed(1),
   }));
-  const { bottom, height, angle } = labelLayout(data.map((d) => d.name));
+  const { bottom, height, angle, left } = labelLayout(data.map((d) => d.name));
 
   return (
     <div>
       <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('coverageChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: 0 }}>
+        <BarChart data={data} margin={{ top: 8, right: 12, bottom, left: Math.max(left || 0, 8) }}>
           <defs>
             <linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={c.barFrom} />
