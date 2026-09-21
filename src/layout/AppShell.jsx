@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { TopNav } from '../components/layout/TopNav.jsx';
 import { hydrateTheme, hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
+import ProductTour from '../components/tour/ProductTour.jsx';
 
 export default function AppShell() {
   const { pathname } = useLocation();
@@ -21,6 +22,7 @@ export default function AppShell() {
       <main className={cn(flush ? 'min-h-[calc(100dvh-57px)]' : 'mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-10')}>
         <Outlet />
       </main>
+      <ProductTour />
     </div>
   );
 }
