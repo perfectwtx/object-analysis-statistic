@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { DimBars } from '../components/DimBars.jsx';
 import { ScoreRing } from '../components/ScoreRing.jsx';
 import { PageHeader } from '../components/layout/PageHeader.jsx';
@@ -13,6 +13,7 @@ import { t } from '../lib/i18n.js';
 import {
   TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
 } from '../components/ui/data-table.jsx';
+import { deleteJob, loadLastJobId, clearLastJobId } from '../api/index.js';
 
 export default function QualityDashboard() {
   const jobs = usePlatform((s) => s.jobs);
@@ -21,8 +22,36 @@ export default function QualityDashboard() {
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
   const refresh = usePlatform((s) => s.refresh);
+  const removeJobLocal = usePlatform((s) => s.removeJobLocal);
   const locale = usePlatform((s) => s.locale);
+  const [deletingId, setDeletingId] = useState('');
+  const [deleteMsg, setDeleteMsg] = useState('');
+
   useEffect(() => { refresh(); }, [refresh]);
+
+  async function handleDelete(job) {
+    const id = job?.id;
+    if (!id) return;
+    const ok = window.confirm(t(locale, 'deleteJobConfirm'));
+    if (!ok) return;
+    setDeletingId(id);
+    setDeleteMsg('');
+    try {
+      const r = await deleteJob(id);
+      if (r.unavailable) {
+        setDeleteMsg(t(locale, 'deleteJobUnavailable'));
+        return;
+      }
+      removeJobLocal(id);
+      if (loadLastJobId() === String(id)) clearLastJobId();
+      setDeleteMsg(t(locale, 'deleteJobOk'));
+      try { await refresh(); } catch { /* ignore */ }
+    } catch (e) {
+      setDeleteMsg(`${t(locale, 'deleteJobFail')}: ${e.message || e}`);
+    } finally {
+      setDeletingId('');
+    }
+  }
 
   return (
     <div>
@@ -48,10 +77,13 @@ export default function QualityDashboard() {
         </Card>
       </div>
       <div className="mt-8">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium">{t(locale, 'recentJobs')}</h2>
           <Link to="/analyze" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'no-underline')}>{t(locale, 'newAnalyze')}</Link>
         </div>
+        {deleteMsg ? (
+          <p className="mb-2 text-xs text-muted-foreground">{deleteMsg}</p>
+        ) : null}
         <TableShell>
           <Table dense>
             <THead sticky>
@@ -61,6 +93,7 @@ export default function QualityDashboard() {
                 <TH align="right">{t(locale, 'rows')}</TH>
                 <TH align="right">{t(locale, 'score')}</TH>
                 <TH align="right">{t(locale, 'issueCount')}</TH>
+                <TH align="right">{t(locale, 'actions')}</TH>
               </tr>
             </THead>
             <TBody>
@@ -71,9 +104,23 @@ export default function QualityDashboard() {
                   <TD align="right">{j.rows ?? '—'}</TD>
                   <TD align="right">{j.score != null ? formatNumber(j.score, 1) : '—'}</TD>
                   <TD align="right">{j.issueCount ?? '—'}</TD>
+                  <TD align="right">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-red-500"
+                      disabled={deletingId === j.id || loading}
+                      title={t(locale, 'deleteJob')}
+                      onClick={() => handleDelete(j)}
+                    >
+                      <Trash2 className={cn('size-3.5', deletingId === j.id && 'animate-pulse')} />
+                      <span className="sr-only sm:not-sr-only sm:ml-1">{t(locale, 'deleteJob')}</span>
+                    </Button>
+                  </TD>
                 </TR>
               ))}
-              {!jobs.length ? <EmptyRow colSpan={5}>{t(locale, 'noData')}</EmptyRow> : null}
+              {!jobs.length ? <EmptyRow colSpan={6}>{t(locale, 'noData')}</EmptyRow> : null}
             </TBody>
           </Table>
         </TableShell>

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
-import { listJobs, loadLastJobId, saveLastJobId } from '../api/index.js';
+import { RefreshCw, Trash2 } from 'lucide-react';
+import { listJobs, loadLastJobId, saveLastJobId, clearLastJobId, deleteJob } from '../api/index.js';
 import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { BackendStatus } from '../components/BackendStatus.jsx';
 import { Button, buttonVariants } from '../components/ui/button.jsx';
@@ -30,6 +30,7 @@ export default function JobDependentPage({
   const [unavailable, setUnavailable] = useState(false);
   const [data, setData] = useState(null);
   const [jobsUnavailable, setJobsUnavailable] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -95,6 +96,48 @@ export default function JobDependentPage({
     saveLastJobId(id);
   };
 
+  const reloadJobs = useCallback(async () => {
+    setLoadingJobs(true);
+    try {
+      const r = await listJobs({ limit: 40 });
+      if (r.unavailable) {
+        setJobsUnavailable(true);
+        setJobs([]);
+      } else {
+        setJobsUnavailable(false);
+        setJobs(asList(r.data).map(normalizeJob).filter(Boolean));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, []);
+
+  const handleDeleteJob = useCallback(async () => {
+    const id = jobId || manualId;
+    if (!id) return;
+    if (!window.confirm(t('deleteJobConfirm') || '确定删除这条分析记录？')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const r = await deleteJob(id);
+      if (r.unavailable) {
+        setError(t('deleteJobUnavailable') || '后端尚未提供删除接口');
+        return;
+      }
+      if (loadLastJobId() === String(id)) clearLastJobId();
+      setJobId('');
+      setManualId('');
+      setData(null);
+      await reloadJobs();
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setDeleting(false);
+    }
+  }, [jobId, manualId, reloadJobs, t]);
+
   return (
     <div>
       <PageHeader
@@ -114,6 +157,16 @@ export default function JobDependentPage({
             >
               <RefreshCw className={cn('size-3.5', fetching && 'animate-spin')} />
               {t('refresh') || '刷新'}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!jobId || deleting || fetching}
+              onClick={handleDeleteJob}
+              className="text-muted-foreground hover:text-red-500"
+            >
+              <Trash2 className={cn('size-3.5', deleting && 'animate-pulse')} />
+              {t('deleteJob') || '删除'}
             </Button>
           </>
         }
