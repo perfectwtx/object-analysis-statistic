@@ -22,7 +22,7 @@ export default function CoverageChart({ fields }) {
     <div>
       <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('coverageChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 12, bottom, left: Math.max(left || 0, 8) }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: Math.max(left || 0, 4) }}>
           <defs>
             <linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={c.barFrom} />
@@ -32,12 +32,13 @@ export default function CoverageChart({ fields }) {
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
           <XAxis
             dataKey="name"
-            angle={angle}
-            textAnchor="end"
+            angle={0}
+            textAnchor="middle"
             interval={0}
             fontSize={11}
             tickLine={false}
             tickFormatter={shortenLabel}
+            height={bottom}
             axisLine={{ stroke: c.axis }}
             tick={{ fill: 'var(--muted-foreground)' }}
           />

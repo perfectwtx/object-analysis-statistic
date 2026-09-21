@@ -22,16 +22,17 @@ export default function TypeChart({ fields }) {
     <div>
       <h3 className="mb-2 text-xs font-medium text-muted-foreground">{t('typeChart')}</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 12, bottom, left: Math.max(left || 0, 8) }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, bottom, left: Math.max(left || 0, 4) }}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} vertical={false} />
           <XAxis
             dataKey="name"
-            angle={angle}
-            textAnchor="end"
+            angle={0}
+            textAnchor="middle"
             interval={0}
             fontSize={11}
             tickLine={false}
             tickFormatter={shortenLabel}
+            height={bottom}
             axisLine={{ stroke: c.axis }}
             tick={{ fill: 'var(--muted-foreground)' }}
           />
