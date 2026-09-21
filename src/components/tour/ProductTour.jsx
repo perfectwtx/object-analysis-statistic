@@ -66,6 +66,7 @@ export default function ProductTour() {
 
   const close = useCallback((markSeen = true) => {
     setActive(false);
+    document.body.style.overflow = '';
     if (markSeen) {
       try {
         localStorage.setItem(TOUR_STORAGE_KEY, '1');
@@ -76,6 +77,7 @@ export default function ProductTour() {
   const open = useCallback(() => {
     setIndex(0);
     setActive(true);
+    document.body.style.overflow = 'hidden';
   }, []);
 
   useEffect(() => {
@@ -85,11 +87,60 @@ export default function ProductTour() {
   }, [open]);
 
   useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => {
+      if (e.key === 'Escape') close(true);
+      if (e.key === 'ArrowRight' || e.key === 'Enter') {
+        e.preventDefault();
+        setIndex((i) => {
+          if (i >= TOUR_STEPS.length - 1) {
+            close(true);
+            return i;
+          }
+          return i + 1;
+        });
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setIndex((i) => Math.max(0, i - 1));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, close]);
+
+  // First visit: auto-open after layout is ready
+  useEffect(() => {
+    let cancelled = false;
     try {
       if (localStorage.getItem(TOUR_STORAGE_KEY)) return;
     } catch { /* ignore */ }
-    const tmr = setTimeout(() => open(), 800);
-    return () => clearTimeout(tmr);
+
+    const tryOpen = () => {
+      if (cancelled) return;
+      // Wait until primary nav exists so spotlight has a real target
+      const ready = document.querySelector('[data-tour="logo"], [data-tour="primary-nav"]');
+      if (ready) {
+        open();
+        return true;
+      }
+      return false;
+    };
+
+    // Try a few times as React finishes painting
+    let attempts = 0;
+    const tick = () => {
+      if (cancelled) return;
+      if (tryOpen()) return;
+      attempts += 1;
+      if (attempts < 12) setTimeout(tick, 150);
+      else open(); // fallback: open even without target
+    };
+    const tmr = setTimeout(tick, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(tmr);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -128,6 +179,7 @@ export default function ProductTour() {
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={t(locale, 'tourAria')}>
+      {/* backdrop with spotlight hole */}
       <div
         className="absolute inset-0 transition-[clip-path] duration-300 ease-out"
         style={{
@@ -207,6 +259,7 @@ export default function ProductTour() {
           </div>
         </div>
 
+        {/* progress dots */}
         <div className="mt-3 flex justify-center gap-1.5">
           {TOUR_STEPS.map((s, i) => (
             <button
