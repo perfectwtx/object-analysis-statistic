@@ -71,6 +71,15 @@ export const usePlatform = create((set, get) => ({
     }
   },
 
+  /** 本地先去掉一条作业（删除 API 成功后调用），再可选 refresh */
+  removeJobLocal: (jobId) => {
+    const id = String(jobId || '');
+    if (!id) return;
+    set((s) => ({
+      jobs: (s.jobs || []).filter((j) => String(j.id) !== id),
+    }));
+  },
+
   refresh: async () => {
     if (get().loading) return;
     set({ loading: true, error: null });
