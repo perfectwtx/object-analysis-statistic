@@ -39,7 +39,7 @@ export default function WorkbenchLayout({
               <span className="truncate font-mono text-xs">{fileName || '未选择'}</span>
             </div>
             {error ? <div className="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div> : null}
-            <div className="grid gap-2">
+            <div data-tour="data-source" className="grid gap-2">
               <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40" onClick={() => fileInput.current?.click()} disabled={busy}>上传文件</button>
               <input ref={fileInput} type="file" className="hidden" accept=".json,.jsonl,.txt,.csv,.xml,.yaml,.yml,.xlsx,.xls,.gz,.zip" onChange={onFile} />
               <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40" onClick={onPaste} disabled={busy}>粘贴数据</button>
@@ -82,7 +82,7 @@ export default function WorkbenchLayout({
           </div>
         ) : null}
         {result ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div data-tour="results-panel" className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{fileName || '分析结果'}</div>
