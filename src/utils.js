@@ -240,55 +240,31 @@ export function formatRulesError(msg) {
 
 // ---------- 图表 X 轴标签布局 ----------
 //
-// 字段名旋转后向下伸出高度 ≈ 字符宽 × 字符数 × sin(角度)。固定留白要么裁掉长名字，
-// 要么浪费空间，所以按最长标签动态算留白，并同步增高图表，保证绘图区不被压扁。
+// 轴上只显示字段路径最后一段（水平），完整路径在柱子 Tooltip 中展示。
 
-export const CHART_ANGLE = -32;   // 略平一点，减少左侧裁切
-export const MAX_LABEL = 36;      // 轴上尽量多显示路径；完整名仍在 tooltip
+export const CHART_ANGLE = 0;     // 水平显示，不倾斜
+export const MAX_LABEL = 14;      // 轴上只显示末段，过长再截；完整路径在柱子 tooltip
 const CHAR_W = 6.2;               // 11px 字号下每字符的近似宽度
 
 /**
- * 缩短字段路径：优先保留路径尾部（最具体的字段名），过长时前缀用 …。
- * 避免只露出最后一个点号后的词，同时比「从头截断」更易辨认。
+ * 轴标签：只取路径最后一段（最后一个 `.` 之后）。
+ * 完整字段路径在柱子悬停 Tooltip 中显示。
  */
 export function shortenLabel(name, max = MAX_LABEL) {
   const s = String(name ?? '');
-  if (!s || s.length <= max) return s;
-
-  // 带点号：尽量保留末尾若干段
-  if (s.includes('.')) {
-    const parts = s.split('.');
-    let candidate = parts[parts.length - 1];
-    for (let i = parts.length - 2; i >= 0; i -= 1) {
-      const next = `${parts[i]}.${candidate}`;
-      // 预留 1 字符给前导 …
-      if (next.length + 1 > max) break;
-      candidate = next;
-    }
-    if (candidate.length < s.length) {
-      const withEllipsis = `…${candidate}`;
-      return withEllipsis.length <= max
-        ? withEllipsis
-        : `…${candidate.slice(-(max - 1))}`;
-    }
-    return candidate;
-  }
-
-  // 无点号：中间省略，首尾都留一点
-  if (max < 5) return `${s.slice(0, max - 1)}…`;
-  const head = Math.ceil((max - 1) / 2);
-  const tail = max - 1 - head;
-  return `${s.slice(0, head)}…${s.slice(-tail)}`;
+  if (!s) return '';
+  const leaf = s.includes('.') ? s.slice(s.lastIndexOf('.') + 1) : s;
+  if (leaf.length <= max) return leaf;
+  return `${leaf.slice(0, max - 1)}…`;
 }
 
 /** @returns {{ bottom: number, height: number, angle: number, left: number }} */
 export function labelLayout(names) {
   const labels = names.map((n) => shortenLabel(n));
   const maxLabel = Math.max(1, ...labels.map((n) => n.length));
-  const rad = (Math.abs(CHART_ANGLE) * Math.PI) / 180;
-  // 旋转后标签向左下伸出：底部与左侧都要留白，否则会被裁成只剩末尾
-  const bottom = Math.min(Math.round(32 + maxLabel * CHAR_W * Math.sin(rad)), 160);
-  const left = Math.min(Math.round(8 + maxLabel * CHAR_W * Math.cos(rad) * 0.35), 48);
-  const height = 300 + Math.max(0, bottom - 64);
+  // 水平标签：底部固定一行高度即可
+  const bottom = Math.min(28 + Math.round(maxLabel * 0.4), 48);
+  const left = 8;
+  const height = 280;
   return { bottom, height, angle: CHART_ANGLE, left };
 }
