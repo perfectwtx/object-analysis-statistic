@@ -269,7 +269,7 @@ export function shortenLabel(name, max = MAX_LABEL) {
       const withEllipsis = `…${candidate}`;
       return withEllipsis.length <= max
         ? withEllipsis
-        : `…${candidate.slice(-(max - 1)}`;
+        : `…${candidate.slice(-(max - 1))}`;
     }
     return candidate;
   }
