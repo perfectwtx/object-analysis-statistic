@@ -243,20 +243,52 @@ export function formatRulesError(msg) {
 // 字段名旋转后向下伸出高度 ≈ 字符宽 × 字符数 × sin(角度)。固定留白要么裁掉长名字，
 // 要么浪费空间，所以按最长标签动态算留白，并同步增高图表，保证绘图区不被压扁。
 
-export const CHART_ANGLE = -35;   // 小于 -40° 更省垂直空间
-export const MAX_LABEL = 28;      // 超过则截断，完整名仍在 tooltip 里
+export const CHART_ANGLE = -32;   // 略平一点，减少左侧裁切
+export const MAX_LABEL = 36;      // 轴上尽量多显示路径；完整名仍在 tooltip
 const CHAR_W = 6.2;               // 11px 字号下每字符的近似宽度
 
+/**
+ * 缩短字段路径：优先保留路径尾部（最具体的字段名），过长时前缀用 …。
+ * 避免只露出最后一个点号后的词，同时比「从头截断」更易辨认。
+ */
 export function shortenLabel(name, max = MAX_LABEL) {
   const s = String(name ?? '');
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+  if (!s || s.length <= max) return s;
+
+  // 带点号：尽量保留末尾若干段
+  if (s.includes('.')) {
+    const parts = s.split('.');
+    let candidate = parts[parts.length - 1];
+    for (let i = parts.length - 2; i >= 0; i -= 1) {
+      const next = `${parts[i]}.${candidate}`;
+      // 预留 1 字符给前导 …
+      if (next.length + 1 > max) break;
+      candidate = next;
+    }
+    if (candidate.length < s.length) {
+      const withEllipsis = `…${candidate}`;
+      return withEllipsis.length <= max
+        ? withEllipsis
+        : `…${candidate.slice(-(max - 1)}`;
+    }
+    return candidate;
+  }
+
+  // 无点号：中间省略，首尾都留一点
+  if (max < 5) return `${s.slice(0, max - 1)}…`;
+  const head = Math.ceil((max - 1) / 2);
+  const tail = max - 1 - head;
+  return `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
-/** @returns {{ bottom: number, height: number, angle: number }} */
+/** @returns {{ bottom: number, height: number, angle: number, left: number }} */
 export function labelLayout(names) {
-  const maxLabel = Math.max(1, ...names.map((n) => shortenLabel(n).length));
+  const labels = names.map((n) => shortenLabel(n));
+  const maxLabel = Math.max(1, ...labels.map((n) => n.length));
   const rad = (Math.abs(CHART_ANGLE) * Math.PI) / 180;
-  const bottom = Math.min(Math.round(26 + maxLabel * CHAR_W * Math.sin(rad)), 150);
+  // 旋转后标签向左下伸出：底部与左侧都要留白，否则会被裁成只剩末尾
+  const bottom = Math.min(Math.round(32 + maxLabel * CHAR_W * Math.sin(rad)), 160);
+  const left = Math.min(Math.round(8 + maxLabel * CHAR_W * Math.cos(rad) * 0.35), 48);
   const height = 300 + Math.max(0, bottom - 64);
-  return { bottom, height, angle: CHART_ANGLE };
+  return { bottom, height, angle: CHART_ANGLE, left };
 }
