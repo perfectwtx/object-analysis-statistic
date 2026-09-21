@@ -35,6 +35,7 @@ export default function RulesRuntimeSection({
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">规则与运行</div>
           <button
             type="button"
+            data-tour="rules-config"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5 text-xs font-medium text-foreground shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40"
             onClick={() => setConfigOpen(true)}
             disabled={busy}
