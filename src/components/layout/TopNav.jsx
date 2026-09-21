@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, HelpCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PRIMARY_NAV, SEARCH_TARGETS, activeSection } from '../../lib/nav.js';
 import { usePlatform } from '../../lib/store.js';
@@ -7,6 +7,7 @@ import { t } from '../../lib/i18n.js';
 import { cn } from '../../lib/cn.js';
 import { BackendStatus } from '../BackendStatus.jsx';
 import ThemeSwitch, { LocaleSwitch } from '../ThemeSwitch.jsx';
+import { startProductTour } from '../tour/ProductTour.jsx';
 
 export function TopNav() {
   const { pathname } = useLocation();
@@ -43,10 +44,21 @@ export function TopNav() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  const tourAttr = (id) => {
+    if (id === 'analyze') return 'nav-analyze';
+    if (id === 'quality') return 'nav-quality';
+    if (id === 'insights') return 'nav-insights';
+    return undefined;
+  };
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
-        <Link to="/" className="flex shrink-0 items-center gap-2.5 text-foreground no-underline">
+        <Link
+          to="/"
+          data-tour="logo"
+          className="flex shrink-0 items-center gap-2.5 text-foreground no-underline"
+        >
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
               <path
@@ -67,13 +79,17 @@ export function TopNav() {
         </Link>
 
         <nav className="flex min-w-0 flex-1 items-center overflow-x-auto">
-          <div className="mx-auto flex rounded-full bg-muted p-1 shadow-[var(--elev)]">
+          <div
+            data-tour="primary-nav"
+            className="mx-auto flex rounded-full bg-muted p-1 shadow-[var(--elev)]"
+          >
             {PRIMARY_NAV.map((item) => {
               const on = item.match(pathname);
               return (
                 <Link
                   key={item.id}
                   to={item.to}
+                  data-tour={tourAttr(item.id)}
                   className={cn(
                     'shrink-0 rounded-full px-3.5 py-1.5 text-sm no-underline transition-colors',
                     on
@@ -122,8 +138,19 @@ export function TopNav() {
         </div>
 
         <BackendStatus className="hidden lg:inline-flex" />
-        <LocaleSwitch />
-        <ThemeSwitch compact />
+        <div data-tour="theme-locale" className="flex items-center gap-0.5">
+          <button
+            type="button"
+            title={t(locale, 'tourHelp')}
+            aria-label={t(locale, 'tourHelp')}
+            onClick={() => startProductTour()}
+            className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <HelpCircle className="size-4" />
+          </button>
+          <LocaleSwitch />
+          <ThemeSwitch compact />
+        </div>
       </div>
 
       {section?.children?.length ? (
