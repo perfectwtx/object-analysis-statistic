@@ -13,7 +13,7 @@ import PasteDataModal from '../components/PasteDataModal.jsx';
 /** Presentational layout for analysis workbench */
 export default function WorkbenchLayout({
   busy, sidebarW, onResizeStart,
-  fileName, error, fileInput, onFile, onPaste, loadSample,
+  fileName, error, fileInput, onFile, onPaste, loadSample, loadFullSample,
   pasteOpen, setPasteOpen, onSubmitPaste, defaultPasteFormat,
   source, runAnalysis, rulesText, cancelAnalysis,
   phase, progress, jobId, asyncError, forceAsync, setForceAsync,
@@ -44,6 +44,7 @@ export default function WorkbenchLayout({
               <input ref={fileInput} type="file" className="hidden" accept=".json,.jsonl,.txt,.csv,.xml,.yaml,.yml,.xlsx,.xls,.gz,.zip" onChange={onFile} />
               <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40" onClick={onPaste} disabled={busy}>粘贴数据</button>
               <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={loadSample} disabled={busy}>加载样例数据</button>
+              <button type="button" className="h-9 rounded-lg border border-primary/30 bg-primary/10 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-40" onClick={loadFullSample} disabled={busy} title="加载覆盖全部规则类型的数据与规则配置，并立即分析">加载全量样例</button>
               <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={() => source && runAnalysis(source, rulesText)} disabled={busy || !source}>重新分析</button>
             </div>
           </section>
