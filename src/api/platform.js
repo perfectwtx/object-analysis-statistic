@@ -59,6 +59,49 @@ export function getJobOverview(jobId, opts) {
   ], { timeout: 30_000, ...opts });
 }
 
+/**
+ * 删除一条分析历史（及其关联结果）。
+ * 后端约定：DELETE /api/analysis/jobs/{jobId}
+ * 可选别名：DELETE /api/jobs/{jobId}
+ * 成功 204/200；不存在 404；进行中可 409（前端会提示）。
+ */
+export function deleteJob(jobId, opts) {
+  const id = encodeURIComponent(jobId);
+  return tryPaths([
+    `/analysis/jobs/${id}`,
+    `/jobs/${id}`,
+  ], { method: 'DELETE', timeout: 15_000, ...opts });
+}
+
+/** 批量删除：优先 body { ids }，失败则逐条 DELETE */
+export async function deleteJobs(jobIds, opts) {
+  const ids = (jobIds || []).map(String).filter(Boolean);
+  if (!ids.length) return { data: { deleted: 0 }, unavailable: false };
+  // 尝试批量端点
+  const bulk = await tryPaths(
+    ['/analysis/jobs', '/jobs'],
+    {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+      timeout: 30_000,
+      ...opts,
+    },
+  );
+  if (!bulk.unavailable) return bulk;
+  let deleted = 0;
+  const failed = [];
+  for (const id of ids) {
+    const r = await deleteJob(id, opts);
+    if (r.unavailable) failed.push(id);
+    else deleted += 1;
+  }
+  return {
+    data: { deleted, failed },
+    unavailable: deleted === 0 && failed.length > 0,
+  };
+}
+
 // ── Quality ──
 
 export function getQualityDashboard(opts) {
@@ -274,4 +317,7 @@ export function saveLastJobId(id) {
 }
 export function loadLastJobId() {
   try { return localStorage.getItem(LAST_JOB_KEY) || ''; } catch { return ''; }
+}
+export function clearLastJobId() {
+  try { localStorage.removeItem(LAST_JOB_KEY); } catch { /* ignore */ }
 }
