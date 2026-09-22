@@ -11,6 +11,7 @@ import ErrorBanner from '../components/ui/ErrorBanner.jsx';
 import { asList, normalizeJob } from '../lib/normalize.js';
 import { cn } from '../lib/cn.js';
 import { useT } from '../lib/i18n.js';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx';
 
 export default function JobDependentPage({
   title,
@@ -31,6 +32,7 @@ export default function JobDependentPage({
   const [data, setData] = useState(null);
   const [jobsUnavailable, setJobsUnavailable] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -114,22 +116,22 @@ export default function JobDependentPage({
     }
   }, []);
 
-  const handleDeleteJob = useCallback(async () => {
+  const performDeleteJob = useCallback(async () => {
     const id = jobId || manualId;
     if (!id) return;
-    if (!window.confirm(t('deleteJobConfirm') || '确定删除这条分析记录？')) return;
     setDeleting(true);
     setError('');
     try {
       const r = await deleteJob(id);
       if (r.unavailable) {
-        setError(t('deleteJobUnavailable') || '后端尚未提供删除接口');
+        setError(t('deleteJobUnavailable') || '后端未开放删除（405/404）');
         return;
       }
       if (loadLastJobId() === String(id)) clearLastJobId();
       setJobId('');
       setManualId('');
       setData(null);
+      setConfirmOpen(false);
       await reloadJobs();
     } catch (e) {
       setError(e.message || String(e));
@@ -162,7 +164,7 @@ export default function JobDependentPage({
               variant="secondary"
               size="sm"
               disabled={!jobId || deleting || fetching}
-              onClick={handleDeleteJob}
+              onClick={() => setConfirmOpen(true)}
               className="text-muted-foreground hover:text-red-500"
             >
               <Trash2 className={cn('size-3.5', deleting && 'animate-pulse')} />
@@ -237,6 +239,18 @@ export default function JobDependentPage({
           {emptyHint || '暂无数据'}
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => !deleting && setConfirmOpen(false)}
+        onConfirm={performDeleteJob}
+        title={t('deleteJob') || '删除'}
+        description={t('deleteJobConfirm') || '确定删除这条分析记录？删除后不可恢复。'}
+        confirmLabel={t('confirmDelete') || t('deleteJob') || '删除'}
+        cancelLabel={t('confirmCancel') || '取消'}
+        variant="danger"
+        loading={deleting}
+      />
     </div>
   );
 }
