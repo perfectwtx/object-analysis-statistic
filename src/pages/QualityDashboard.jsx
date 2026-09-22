@@ -140,8 +140,8 @@ export default function QualityDashboard() {
             ? `${t(locale, 'deleteJobConfirm')}${pendingJob.sourceName ? `\n「${pendingJob.sourceName}」` : ''}`
             : t(locale, 'deleteJobConfirm')
         }
-        confirmLabel={t(locale, 'confirmDelete') || t(locale, 'deleteJob')}
-        cancelLabel={t(locale, 'confirmCancel') || '取消'}
+        confirmLabel={t(locale, 'confirmDelete')}
+        cancelLabel={t(locale, 'confirmCancel')}
         variant="danger"
         loading={!!deletingId}
       />
