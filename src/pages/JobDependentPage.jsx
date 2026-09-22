@@ -124,7 +124,7 @@ export default function JobDependentPage({
     try {
       const r = await deleteJob(id);
       if (r.unavailable) {
-        setError(t('deleteJobUnavailable') || '后端未开放删除（405/404）');
+        setError(t('deleteJobUnavailable'));
         return;
       }
       if (loadLastJobId() === String(id)) clearLastJobId();
@@ -149,7 +149,7 @@ export default function JobDependentPage({
           <>
             <BackendStatus />
             <Link to="/analyze" className={cn(buttonVariants({ size: 'sm' }), 'no-underline')}>
-              {t('goAnalyze') || '去分析'}
+              {t('goAnalyze')}
             </Link>
             <Button
               variant="secondary"
@@ -158,7 +158,7 @@ export default function JobDependentPage({
               onClick={() => load(jobId)}
             >
               <RefreshCw className={cn('size-3.5', fetching && 'animate-spin')} />
-              {t('refresh') || '刷新'}
+              {t('refresh')}
             </Button>
             <Button
               variant="secondary"
@@ -168,7 +168,7 @@ export default function JobDependentPage({
               className="text-muted-foreground hover:text-red-500"
             >
               <Trash2 className={cn('size-3.5', deleting && 'animate-pulse')} />
-              {t('deleteJob') || '删除'}
+              {t('deleteJob')}
             </Button>
           </>
         }
@@ -177,7 +177,7 @@ export default function JobDependentPage({
       <Card className="mb-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="block min-w-[200px] flex-1">
-            <span className="mb-1 block text-xs text-muted-foreground">选择作业</span>
+            <span className="mb-1 block text-xs text-muted-foreground">{t('selectJob')}</span>
             <select
               className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary/40"
               value={jobId}
@@ -187,7 +187,7 @@ export default function JobDependentPage({
                 setManualId(e.target.value);
               }}
             >
-              <option value="">{jobsUnavailable ? '作业列表不可用' : '选择 Job…'}</option>
+              <option value="">{jobsUnavailable ? t('noJobList') : t('selectJob')}</option>
               {jobs.map((j) => (
                 <option key={j.id} value={j.id}>
                   {(j.sourceName || j.id).slice(0, 48)} · {(j.status || '').toString()}
@@ -196,7 +196,7 @@ export default function JobDependentPage({
             </select>
           </label>
           <label className="block min-w-[240px] flex-1">
-            <span className="mb-1 block text-xs text-muted-foreground">或粘贴 JobId</span>
+            <span className="mb-1 block text-xs text-muted-foreground">{t('jobDependentHint')}</span>
             <div className="flex gap-2">
               <input
                 className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm outline-none focus:border-primary/40"
@@ -205,7 +205,7 @@ export default function JobDependentPage({
                 placeholder="guid / job id"
               />
               <Button size="sm" variant="secondary" onClick={applyManual}>
-                加载
+                {t('refresh')}
               </Button>
             </div>
           </label>
@@ -218,17 +218,17 @@ export default function JobDependentPage({
       </Card>
 
       {error ? <div className="mb-4"><ErrorBanner message={error} /></div> : null}
-      {fetching ? <LoadingBlock label="查询中…" /> : null}
+      {fetching ? <LoadingBlock label={t('loading')} /> : null}
 
       {!fetching && unavailable && (
         <Card className="py-10 text-center text-sm text-muted-foreground">
-          <div className="font-medium text-foreground">接口暂不可用</div>
+          <div className="font-medium text-foreground">{t('apiReadyLater')}</div>
           <p className="mt-1 text-xs">
             {endpointTemplate
               ? endpointTemplate.replace('{jobId}', jobId || '{jobId}')
-              : '请确认后端已开放对应端点'}
+              : t('jobDependentHint')}
           </p>
-          <p className="mt-2 text-xs">{emptyHint || '可先在「分析任务」完成一次异步分析，再将 JobId 粘贴到上方。'}</p>
+          <p className="mt-2 text-xs">{emptyHint || t('jobDependentHint')}</p>
         </Card>
       )}
 
@@ -236,7 +236,7 @@ export default function JobDependentPage({
 
       {!fetching && !unavailable && data == null && jobId && !error && (
         <Card className="py-10 text-center text-sm text-muted-foreground">
-          {emptyHint || '暂无数据'}
+          {emptyHint || t('noData')}
         </Card>
       )}
 
@@ -244,10 +244,10 @@ export default function JobDependentPage({
         open={confirmOpen}
         onClose={() => !deleting && setConfirmOpen(false)}
         onConfirm={performDeleteJob}
-        title={t('deleteJob') || '删除'}
-        description={t('deleteJobConfirm') || '确定删除这条分析记录？删除后不可恢复。'}
-        confirmLabel={t('confirmDelete') || t('deleteJob') || '删除'}
-        cancelLabel={t('confirmCancel') || '取消'}
+        title={t('deleteJob')}
+        description={t('deleteJobConfirm')}
+        confirmLabel={t('confirmDelete')}
+        cancelLabel={t('confirmCancel')}
         variant="danger"
         loading={deleting}
       />
