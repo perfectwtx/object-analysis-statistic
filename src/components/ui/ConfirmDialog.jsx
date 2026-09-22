@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { cn } from '../../lib/cn.js';
 import { Button } from './button.jsx';
+import { cn } from '../../lib/cn.js';
+import { useT } from '../../lib/i18n.js';
 
 /**
  * 应用内确认对话框，替代 window.confirm。
- * - open / onClose / onConfirm
- * - variant: 'danger' | 'default'
+ * 文案默认走 i18n；也可由调用方覆盖 title / description / 按钮文字。
  */
 export function ConfirmDialog({
   open,
@@ -14,12 +14,18 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmLabel = '确定',
-  cancelLabel = '取消',
+  confirmLabel,
+  cancelLabel,
   variant = 'danger',
   loading = false,
 }) {
+  const { t } = useT();
   const confirmRef = useRef(null);
+
+  const resolvedTitle = title ?? t('confirmOk');
+  const resolvedConfirm = confirmLabel ?? t('confirmDelete');
+  const resolvedCancel = cancelLabel ?? t('confirmCancel');
+  const processingLabel = t('processing');
 
   useEffect(() => {
     if (!open) return undefined;
@@ -29,9 +35,9 @@ export function ConfirmDialog({
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const t = setTimeout(() => confirmRef.current?.focus?.(), 30);
+    const timer = setTimeout(() => confirmRef.current?.focus?.(), 30);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
@@ -46,7 +52,7 @@ export function ConfirmDialog({
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-        aria-label="Close"
+        aria-label={resolvedCancel}
         disabled={loading}
         onClick={() => !loading && onClose?.()}
       />
@@ -68,7 +74,7 @@ export function ConfirmDialog({
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
             <h2 id="oa-confirm-title" className="text-base font-medium tracking-tight text-foreground">
-              {title}
+              {resolvedTitle}
             </h2>
             {description ? (
               <p id="oa-confirm-desc" className="mt-1.5 text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
@@ -79,7 +85,7 @@ export function ConfirmDialog({
         </div>
         <div className="flex justify-end gap-2 px-5 py-4">
           <Button type="button" variant="secondary" size="sm" disabled={loading} onClick={onClose}>
-            {cancelLabel}
+            {resolvedCancel}
           </Button>
           <Button
             ref={confirmRef}
@@ -92,7 +98,7 @@ export function ConfirmDialog({
             )}
             onClick={onConfirm}
           >
-            {loading ? '处理中…' : confirmLabel}
+            {loading ? processingLabel : resolvedConfirm}
           </Button>
         </div>
       </div>
