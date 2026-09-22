@@ -31,7 +31,9 @@ export async function request(path, { method = 'GET', body, headers, signal, tim
       err.status = res.status;
       err.payload = payload;
       err.notFound = res.status === 404;
-      err.notImplemented = res.status === 404 || res.status === 501;
+      // 405：路由存在但不支持该方法（常见于尚未实现 DELETE）
+      err.notImplemented = res.status === 404 || res.status === 405 || res.status === 501;
+      err.methodNotAllowed = res.status === 405;
       throw err;
     }
     return payload;
@@ -52,7 +54,7 @@ export async function tryRequest(path, opts) {
     const data = await request(path, opts);
     return { data, unavailable: false };
   } catch (e) {
-    if (e.notFound || e.notImplemented || e.status === 404 || e.status === 501) {
+    if (e.notFound || e.notImplemented || e.status === 404 || e.status === 405 || e.status === 501) {
       return { data: null, unavailable: true, error: e.message, status: e.status };
     }
     throw e;
