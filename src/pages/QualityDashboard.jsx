@@ -7,6 +7,7 @@ import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { BackendStatus } from '../components/BackendStatus.jsx';
 import { Button, buttonVariants } from '../components/ui/button.jsx';
 import { Card, CardHint, CardTitle } from '../components/ui/card.jsx';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.jsx';
 import { usePlatform } from '../lib/store.js';
 import { cn, formatNumber } from '../lib/cn.js';
 import { t } from '../lib/i18n.js';
@@ -26,14 +27,13 @@ export default function QualityDashboard() {
   const locale = usePlatform((s) => s.locale);
   const [deletingId, setDeletingId] = useState('');
   const [deleteMsg, setDeleteMsg] = useState('');
+  const [pendingJob, setPendingJob] = useState(null);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  async function handleDelete(job) {
+  async function performDelete(job) {
     const id = job?.id;
     if (!id) return;
-    const ok = window.confirm(t(locale, 'deleteJobConfirm'));
-    if (!ok) return;
     setDeletingId(id);
     setDeleteMsg('');
     try {
@@ -47,9 +47,13 @@ export default function QualityDashboard() {
       setDeleteMsg(t(locale, 'deleteJobOk'));
       try { await refresh(); } catch { /* ignore */ }
     } catch (e) {
-      setDeleteMsg(`${t(locale, 'deleteJobFail')}: ${e.message || e}`);
+      const msg = e.status === 405
+        ? t(locale, 'deleteJobUnavailable')
+        : `${t(locale, 'deleteJobFail')}: ${e.message || e}`;
+      setDeleteMsg(msg);
     } finally {
       setDeletingId('');
+      setPendingJob(null);
     }
   }
 
@@ -112,7 +116,7 @@ export default function QualityDashboard() {
                       className="text-muted-foreground hover:text-red-500"
                       disabled={deletingId === j.id || loading}
                       title={t(locale, 'deleteJob')}
-                      onClick={() => handleDelete(j)}
+                      onClick={() => setPendingJob(j)}
                     >
                       <Trash2 className={cn('size-3.5', deletingId === j.id && 'animate-pulse')} />
                       <span className="sr-only sm:not-sr-only sm:ml-1">{t(locale, 'deleteJob')}</span>
@@ -125,6 +129,22 @@ export default function QualityDashboard() {
           </Table>
         </TableShell>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingJob}
+        onClose={() => !deletingId && setPendingJob(null)}
+        onConfirm={() => performDelete(pendingJob)}
+        title={t(locale, 'deleteJob')}
+        description={
+          pendingJob
+            ? `${t(locale, 'deleteJobConfirm')}${pendingJob.sourceName ? `\n「${pendingJob.sourceName}」` : ''}`
+            : t(locale, 'deleteJobConfirm')
+        }
+        confirmLabel={t(locale, 'confirmDelete') || t(locale, 'deleteJob')}
+        cancelLabel={t(locale, 'confirmCancel') || '取消'}
+        variant="danger"
+        loading={!!deletingId}
+      />
     </div>
   );
 }
