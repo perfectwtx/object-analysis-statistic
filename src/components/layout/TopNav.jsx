@@ -138,17 +138,22 @@ export function TopNav() {
         </div>
 
         <BackendStatus className="hidden lg:inline-flex" />
-        <div data-tour="theme-locale" className="flex items-center gap-0.5">
+        <div
+          data-tour="theme-locale"
+          className="flex items-center gap-2 sm:gap-2.5"
+        >
           <button
             type="button"
             title={t(locale, 'tourHelp')}
             aria-label={t(locale, 'tourHelp')}
             onClick={() => startProductTour()}
-            className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="grid size-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <HelpCircle className="size-4" />
           </button>
+          <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
           <LocaleSwitch />
+          <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
           <ThemeSwitch compact />
         </div>
       </div>
