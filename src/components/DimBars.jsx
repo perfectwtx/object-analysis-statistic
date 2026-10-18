@@ -9,7 +9,7 @@ export function DimBars({ dims }) {
         <li key={k} className="grid grid-cols-[4.5rem_1fr_2.5rem] items-center gap-3">
           <span className="text-sm text-muted-foreground">{DIM_LABEL[k]}</span>
           <Bar value={dims[k]} tone={scoreTone(dims[k])} />
-          <span className="text-right font-mono text-xs tabular-nums">{formatNumber(dims[k], 0)}</span>
+          <span className="text-right font-mono text-xs tabular-nums">{dims[k] == null ? '—' : formatNumber(dims[k], 0)}</span>
         </li>
       ))}
     </ul>

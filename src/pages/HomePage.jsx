@@ -23,7 +23,6 @@ export default function HomePage() {
   const score = usePlatform((s) => s.score);
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
-  const error = usePlatform((s) => s.error);
   const refresh = usePlatform((s) => s.refresh);
   const locale = usePlatform((s) => s.locale);
 
@@ -31,7 +30,7 @@ export default function HomePage() {
     refresh();
   }, [refresh]);
 
-  const displayScore = score ?? 0;
+  const displayScore = score;
   const topIssues = (issues || []).slice(0, 4);
 
   return (
@@ -53,12 +52,6 @@ export default function HomePage() {
           </>
         }
       />
-
-      {error && source === 'demo' ? (
-        <div className="mb-6 rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          {error}
-        </div>
-      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <Card className="flex flex-col justify-between p-6">

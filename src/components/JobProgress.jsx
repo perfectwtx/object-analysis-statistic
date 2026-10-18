@@ -45,7 +45,7 @@ export default function JobProgress({
     statusLabel =
       n > 0 ? `${t('analyzing')} · ${Number(n).toLocaleString()}` : t('analyzing');
     if (progress.progressText) statusLabel = progress.progressText;
-  } else if (phase === 'cancelled') statusLabel = t('cancelled');
+  } else if (phase === 'cancelled') statusLabel = error || t('cancelled');
   else if (phase === 'error') statusLabel = error || t('analyzeFailed');
   else if (phase === 'done') statusLabel = t('done');
 

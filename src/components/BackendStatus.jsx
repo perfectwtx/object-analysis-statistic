@@ -7,11 +7,13 @@ export function BackendStatus({ className }) {
   const backendOk = usePlatform((s) => s.backendOk);
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
+  const modules = usePlatform((s) => s.modules);
+  const partial = Object.values(modules).some((m) => m.source !== 'api');
 
   const label = loading
     ? t('connecting')
-    : backendOk
-      ? source === 'api'
+    : source === 'demo' ? 'Demo' : backendOk
+      ? !partial
         ? t('backendOnline')
         : t('backendOnlinePartial')
       : t('backendOffline');

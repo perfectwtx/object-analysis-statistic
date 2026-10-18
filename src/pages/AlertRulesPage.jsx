@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { PageHeader } from '../components/layout/PageHeader.jsx';
 import { BackendStatus } from '../components/BackendStatus.jsx';
@@ -17,6 +17,8 @@ export default function AlertRulesPage() {
   const toggleAlert = usePlatform((s) => s.toggleAlert);
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
+  const saving = usePlatform((s) => s.alertSaving);
+  const [saveError, setSaveError] = useState('');
   const refresh = usePlatform((s) => s.refresh);
   useEffect(() => { refresh(); }, [refresh]);
   return (
@@ -27,13 +29,14 @@ export default function AlertRulesPage() {
         actions={
           <>
             <BackendStatus />
-            <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={loading}>
+            <Button variant="secondary" size="sm" onClick={() => refresh()} disabled={loading || Object.keys(saving).length > 0}>
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
               {t('refresh')}
             </Button>
           </>
         }
       />
+      {saveError ? <div role="alert" className="mb-4 rounded-lg bg-muted p-3 text-sm text-danger">{saveError}</div> : null}
       <TableShell>
         <Table dense>
           <THead sticky>
@@ -56,9 +59,15 @@ export default function AlertRulesPage() {
                   <button
                     type="button"
                     className="text-xs text-primary hover:underline"
-                    onClick={() => toggleAlert(a.id)}
+                    disabled={loading || !!saving[a.id]}
+                    aria-busy={!!saving[a.id]}
+                    onClick={async () => {
+                      setSaveError('');
+                      try { await toggleAlert(a.id); }
+                      catch (e) { setSaveError(e.message || String(e)); }
+                    }}
                   >
-                    {a.enabled ? t('off') : t('on')}
+                    {saving[a.id] ? t('loading') : a.enabled ? t('off') : t('on')}
                   </button>
                 </TD>
               </TR>

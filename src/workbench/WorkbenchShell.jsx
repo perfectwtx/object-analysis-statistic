@@ -163,6 +163,8 @@ export default function Workbench() {
   const executeAnalysis = useCallback(async (src, opts) => {
     if (!src?.file) return;
     setError('');
+    setResult(null);
+    setElapsed(null);
     const preferAsync = forceAsync || (src.file.size ?? 0) >= ASYNC_THRESHOLD_BYTES;
     await startAnalyze(src.file, opts, { forceAsync: preferAsync, forceSync: !preferAsync && !forceAsync });
   }, [startAnalyze, forceAsync]);
@@ -238,7 +240,7 @@ export default function Workbench() {
   const clearRules = () => {
     setRules(null); setRulesError(''); setRulesCheck(null);
     setRulesText(EMPTY_RULES);
-    if (source) runAnalysis(source, null);
+    if (source) runAnalysis(source, null, null);
   };
 
   const onFile = async (e) => {

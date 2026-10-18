@@ -1,3 +1,4 @@
+import { DEMO_MODE } from '../lib/data-mode.js';
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { listIssues, listJobs } from '../api/index.js';
@@ -17,8 +18,8 @@ import { useT } from '../lib/i18n.js';
 export default function IssueCenter() {
   const { t } = useT();
   const [loading, setLoading] = useState(true);
-  const [source, setSource] = useState('demo');
-  const [issues, setIssues] = useState(SEED_ISSUES);
+  const [source, setSource] = useState(DEMO_MODE ? 'demo' : 'api');
+  const [issues, setIssues] = useState(DEMO_MODE ? SEED_ISSUES : []);
   const [jobs, setJobs] = useState([]);
   const [jobFilter, setJobFilter] = useState('');
   const [sevFilter, setSevFilter] = useState('');
@@ -26,11 +27,12 @@ export default function IssueCenter() {
 
   const load = async () => {
     setLoading(true); setError('');
+    if (DEMO_MODE) { setLoading(false); return; }
     try {
       const jr = await listJobs({ limit: 40 });
       if (!jr.unavailable) setJobs(asList(jr.data).map(normalizeJob).filter(Boolean));
       const r = await listIssues({ jobId: jobFilter || undefined, limit: 200 });
-      if (r.unavailable) { setSource('demo'); setIssues(SEED_ISSUES); }
+      if (r.unavailable) { setSource('api'); setIssues([]); setError('问题接口未启用'); }
       else {
         setSource('api');
         const pack = extractIssuesFromResponse(r.data);
@@ -38,7 +40,7 @@ export default function IssueCenter() {
         setIssues(list);
         if (pack.jobs.length) setJobs(pack.jobs);
       }
-    } catch (e) { setError(e.message); setSource('demo'); setIssues(SEED_ISSUES); }
+    } catch (e) { setError(e.message); setSource('api'); setIssues([]); }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [jobFilter]);

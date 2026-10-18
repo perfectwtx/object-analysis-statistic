@@ -14,7 +14,7 @@ async function tryPaths(paths, opts) {
   let last = { data: null, unavailable: true };
   for (const path of paths) {
     const r = await tryRequest(path, opts);
-    if (!r.unavailable) return r;
+    if (!r.unavailable) return { ...r, path };
     last = r;
   }
   return last;
@@ -273,9 +273,13 @@ export function createAlertRule(body, opts) {
 }
 
 export function updateAlertRule(id, body, opts) {
-  return request(`/alert-rules/${encodeURIComponent(id)}`, {
+  const { basePath = '/alert-rules', ...requestOpts } = opts || {};
+  if (!['/alert-rules', '/alerts/rules', '/quality/alert-rules'].includes(basePath)) {
+    throw new Error('告警更新路径无效');
+  }
+  return request(`${basePath}/${encodeURIComponent(id)}`, {
     method: 'PUT', body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' }, timeout: 15_000, ...opts,
+    headers: { 'Content-Type': 'application/json' }, timeout: 15_000, ...requestOpts,
   });
 }
 

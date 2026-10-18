@@ -1,3 +1,4 @@
+import { DEMO_MODE } from '../lib/data-mode.js';
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { getFieldQualityByJob, listJobs } from '../api/index.js';
@@ -19,11 +20,12 @@ export default function FieldQuality() {
   const [loading, setLoading] = useState(true);
   const [jobs, setJobs] = useState([]);
   const [jobId, setJobId] = useState('');
-  const [fields, setFields] = useState(SEED_FIELDS);
-  const [source, setSource] = useState('demo');
+  const [fields, setFields] = useState(DEMO_MODE ? SEED_FIELDS : []);
+  const [source, setSource] = useState(DEMO_MODE ? 'demo' : 'api');
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (DEMO_MODE) { setLoading(false); return; }
     (async () => {
       try {
         const r = await listJobs({ limit: 30 });
@@ -31,24 +33,24 @@ export default function FieldQuality() {
           const list = asList(r.data).map(normalizeJob).filter(Boolean);
           setJobs(list);
           if (list[0]) setJobId(list[0].id);
-        }
-      } finally { setLoading(false); }
+        } else { setError('作业列表接口未启用'); }
+      } catch (e) { setError(e.message); } finally { setLoading(false); }
     })();
   }, []);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || DEMO_MODE) return;
     (async () => {
       setLoading(true); setError('');
       try {
         const r = await getFieldQualityByJob(jobId);
-        if (r.unavailable) { setSource('demo'); setFields(SEED_FIELDS); }
+        if (r.unavailable) { setSource('api'); setFields([]); setError('字段质量接口未启用'); }
         else {
           setSource('api');
           const list = extractFieldsFromResponse(r.data);
           setFields(list.length ? list : []);
         }
-      } catch (e) { setError(e.message); setSource('demo'); setFields(SEED_FIELDS); }
+      } catch (e) { setError(e.message); setSource('api'); setFields([]); }
       finally { setLoading(false); }
     })();
   }, [jobId]);

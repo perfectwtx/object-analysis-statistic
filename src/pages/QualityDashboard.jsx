@@ -73,7 +73,7 @@ export default function QualityDashboard() {
         }
       />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-6"><ScoreRing score={score ?? 0} label={t(locale, 'qualityTitle')} /></Card>
+        <Card className="p-6"><ScoreRing score={score} label={t(locale, 'qualityTitle')} /></Card>
         <Card>
           <CardTitle>{t(locale, 'dimDetail')}</CardTitle>
           <CardHint>{t(locale, 'dimDetailHint')}</CardHint>

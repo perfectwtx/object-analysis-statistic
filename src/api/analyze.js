@@ -58,19 +58,28 @@ export function subscribeAnalyzeEvents(jobId, { onProgress, onComplete, onGone, 
   return { close };
 }
 
-export function pollAnalyzeJob(jobId, { intervalMs = 1000, onUpdate, onTerminal, onError } = {}) {
-  let stopped = false, timer = null;
+export function pollAnalyzeJob(jobId, { intervalMs = 1000, maxErrors = 5, maxIntervalMs = 15000, onUpdate, onTerminal, onError } = {}) {
+  let stopped = false, timer = null, errors = 0;
+  const ctrl = new AbortController();
   const tick = async () => {
     if (stopped) return;
     try {
-      const snap = await getAnalyzeJob(jobId);
+      const snap = await getAnalyzeJob(jobId, { signal: ctrl.signal });
+      if (stopped) return;
+      errors = 0;
       onUpdate?.(snap);
-      if (!/^running$/i.test(String(snap?.status || ''))) { onTerminal?.(snap); stop(); return; }
-    } catch (e) { onError?.(e); }
-    if (!stopped) timer = setTimeout(tick, intervalMs);
+      if (!/^(running|queued|pending|submitted)$/i.test(String(snap?.status || ''))) { stop(); onTerminal?.(snap); return; }
+    } catch (e) {
+      if (stopped) return;
+      errors += 1;
+      const terminal = e.status === 404 || e.status === 410 || errors >= maxErrors;
+      if (terminal) stop();
+      onError?.(e, { terminal, attempts: errors });
+    }
+    if (!stopped) timer = setTimeout(tick, Math.min(maxIntervalMs, intervalMs * 2 ** errors));
   };
   timer = setTimeout(tick, 0);
-  function stop() { stopped = true; if (timer) clearTimeout(timer); }
+  function stop() { stopped = true; if (timer) clearTimeout(timer); ctrl.abort(); }
   return { stop };
 }
 

@@ -1,27 +1,10 @@
 import { create } from 'zustand';
-import {
-  SEED_ALERTS,
-  SEED_BASELINES,
-  SEED_DIMS,
-  SEED_FIELDS,
-  SEED_ISSUES,
-  SEED_JOBS,
-  SEED_RECS,
-  buildTrend,
-} from './mock-data.js';
+import { initialPlatformData } from './data-mode.js';
 import { loadPlatformOverview } from './load-platform.js';
+import { updateAlertRule } from '../api/platform.js';
 
 export const usePlatform = create((set, get) => ({
-  jobs: SEED_JOBS,
-  issues: SEED_ISSUES,
-  fields: SEED_FIELDS,
-  dims: SEED_DIMS,
-  trend: buildTrend(),
-  baselines: SEED_BASELINES,
-  alerts: SEED_ALERTS,
-  recommendations: SEED_RECS,
-  score: SEED_JOBS[0]?.score ?? 87.4,
-  source: 'demo',
+  ...initialPlatformData(),
   backendOk: false,
   loading: false,
   error: null,
@@ -29,10 +12,33 @@ export const usePlatform = create((set, get) => ({
   theme: 'dark',
   locale: 'zh',
 
-  toggleAlert: (id) =>
-    set((s) => ({
-      alerts: s.alerts.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a)),
-    })),
+  alertSaving: {},
+  toggleAlert: async (id) => {
+    const state = get();
+    if (state.alertSaving[id]) return;
+    const alert = state.alerts.find((a) => a.id === id);
+    if (!alert) return;
+    const enabled = !alert.enabled;
+    if (state.source === 'demo') {
+      set((s) => ({ alerts: s.alerts.map((a) => a.id === id ? { ...a, enabled } : a) }));
+      return;
+    }
+    if (state.loading || state.modules.alerts?.source !== 'api') throw new Error('告警接口尚未就绪');
+    set((s) => ({ alertSaving: { ...s.alertSaving, [id]: true } }));
+    try {
+      // 保留后端原始规则中的阈值、Webhook 等字段，兼容完整 PUT 契约。
+      const body = { ...alert.raw, enabled };
+      if ('Enabled' in body) body.Enabled = enabled;
+      await updateAlertRule(id, body, { basePath: alert.updateBase || '/alert-rules' });
+      set((s) => ({ alerts: s.alerts.map((a) => a.id === id ? { ...a, enabled, raw: body } : a) }));
+    } finally {
+      set((s) => {
+        const alertSaving = { ...s.alertSaving };
+        delete alertSaving[id];
+        return { alertSaving };
+      });
+    }
+  },
 
   setLocale: (locale) => {
     const next = locale === 'en' ? 'en' : 'zh';
@@ -81,7 +87,7 @@ export const usePlatform = create((set, get) => ({
   },
 
   refresh: async () => {
-    if (get().loading) return;
+    if (get().loading || Object.keys(get().alertSaving).length) return;
     set({ loading: true, error: null });
     try {
       const data = await loadPlatformOverview();
@@ -92,7 +98,8 @@ export const usePlatform = create((set, get) => ({
         trend: data.trend,
         baselines: data.baselines,
         alerts: data.alerts,
-        fields: data.fields || SEED_FIELDS,
+        fields: data.fields || [],
+        modules: data.modules,
         score: data.score,
         source: data.source,
         backendOk: data.backendOk,
