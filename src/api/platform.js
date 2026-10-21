@@ -19,7 +19,7 @@ function qs(params = {}) {
 async function tryPaths(paths, opts) {
   const key = `${getBaseUrl()}|${opts?.method || 'GET'}|${paths.map((p) => p.split('?')[0]).join('|')}`;
   const cachedRoute = routeCache.get(key);
-  if (opts?.cacheUnavailable && cachedRoute?.unavailable && Date.now() - cachedRoute.at < CACHE_MS) return cachedRoute.result;
+  if (!opts?.forceDiscovery && opts?.cacheUnavailable && cachedRoute?.unavailable && Date.now() - cachedRoute.at < CACHE_MS) return cachedRoute.result;
   const preferred = cachedRoute?.index;
   const indices = paths.map((_, i) => i);
   if (preferred != null) {
@@ -33,6 +33,7 @@ async function tryPaths(paths, opts) {
     if (!r.unavailable) { routeCache.set(key, { index }); return { ...r, path }; }
     last = r;
   }
+  if (opts?.cacheUnavailable) routeCache.set(key, { unavailable: true, at: Date.now(), result: last });
   return last;
 }
 

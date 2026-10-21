@@ -6,6 +6,7 @@ after(() => server.close());
 const { loadPlatformOverview } = await server.ssrLoadModule('/src/lib/load-platform.js');
 const apiClient = await server.ssrLoadModule('/src/api/platform.js');
 const { routeEnabled } = await server.ssrLoadModule('/src/lib/capabilities.js');
+const { usePlatform } = await server.ssrLoadModule('/src/lib/store.js');
 const originalFetch = globalThis.fetch;
 globalThis.localStorage = { getItem: () => null };
 after(() => { globalThis.fetch = originalFetch; });
@@ -44,4 +45,30 @@ test('能力探测缓存成功与未实现响应，未知能力不隐藏，成�
   globalThis.fetch = async (url) => { calls.push(url); return new Response('{}', { status: 404 }); };
   assert.deepEqual((await apiClient.getCapabilities()).data, {});
   await apiClient.getCapabilities(); assert.equal(calls.length, 2);
+});
+
+test('切换后端再执行模块重试，不复用上一环境数据；显式重试绕过未实现缓存', async () => {
+  let base = '/first', unavailable = true, calls = 0;
+  globalThis.localStorage = { getItem: (key) => key === 'apiBaseOverride' ? base : null };
+  apiClient.clearApiDiscovery();
+  globalThis.fetch = async (url) => {
+    calls++;
+    if (url.includes('/health')) return new Response('{"status":"ok"}');
+    if (url.includes('/capabilities')) return new Response('{}');
+    if (url.includes('/alert-rules') && unavailable) return new Response('{}', { status: 404 });
+    if (url.includes('/alerts/rules') && unavailable) return new Response('{}', { status: 404 });
+    if (url.includes('/analysis/jobs')) return new Response(JSON.stringify([{ id: base }]));
+    return new Response('[]');
+  };
+  await usePlatform.getState().refresh();
+  assert.equal(usePlatform.getState().jobs[0].id, '/first');
+  base = '/second';
+  await usePlatform.getState().refresh({ module: 'alerts' });
+  assert.equal(usePlatform.getState().jobs[0].id, '/second');
+  apiClient.clearApiDiscovery(); calls = 0;
+  await apiClient.listAlertRules(); const initialCalls = calls;
+  await apiClient.listAlertRules(); assert.equal(calls, initialCalls);
+  unavailable = false;
+  await apiClient.listAlertRules({ forceDiscovery: true }); assert.ok(calls > initialCalls);
+  globalThis.localStorage = { getItem: () => null };
 });

@@ -77,10 +77,13 @@ export const usePlatform = create((set, get) => ({
   refresh: async ({ module } = {}) => {
     if (get().loading || Object.keys(get().alertSaving).length) return;
     const base = getBaseUrl();
+    const sameBackend = get().backendBase === base;
+    const previous = sameBackend ? get().overview : undefined;
+    if (!sameBackend) set({ ...initialPlatformData(), capabilities: {}, capabilitiesError: null, overview: null, backendOk: false, lastLoadedAt: null });
     set({ loading: true, error: null });
     void get().loadCapabilities();
     try {
-      const data = await loadPlatformOverview({ previous: get().overview, only: module ? [module] : undefined });
+      const data = await loadPlatformOverview({ previous, only: sameBackend && module ? [module] : undefined });
       set({
         overview: data,
         jobs: data.jobs,

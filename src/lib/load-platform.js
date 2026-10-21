@@ -9,14 +9,15 @@ export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi
   const selected = new Set(only || names);
   if (selected.has('snapshots') || selected.has('trend')) { selected.add('snapshots'); selected.add('trend'); }
   let trendRequest;
-  const trend = () => trendRequest ||= api.getQualityTrend({ limit: 30 });
+  const requestOptions = { forceDiscovery: !!only };
+  const trend = () => trendRequest ||= api.getQualityTrend({ limit: 30 }, requestOptions);
   const loaders = {
-    jobs: () => api.listJobs({ limit: 20 }), issues: () => api.listIssues({ limit: 50 }),
-    snapshots: trend, trend, dashboard: () => api.getQualityDashboard(),
-    baselines: () => api.listBaselines(), alerts: () => api.listAlertRules(),
+    jobs: () => api.listJobs({ limit: 20 }, requestOptions), issues: () => api.listIssues({ limit: 50 }, requestOptions),
+    snapshots: trend, trend, dashboard: () => api.getQualityDashboard(requestOptions),
+    baselines: () => api.listBaselines(requestOptions), alerts: () => api.listAlertRules(requestOptions),
   };
   const [health, ...results] = await Promise.allSettled([
-    only ? Promise.resolve(previous?._health || { ok: false }) : api.checkHealth(),
+    api.checkHealth(),
     ...names.map((name) => selected.has(name) ? loaders[name]() : Promise.resolve(previous?._responses?.[name] || { unavailable: true, data: null })),
   ]);
   const modules = {};
