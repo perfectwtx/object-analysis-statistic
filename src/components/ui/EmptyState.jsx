@@ -1,7 +1,9 @@
-export default function EmptyState({ title = '暂无数据', description, action }) {
+import { useT } from '../../lib/i18n.js';
+export default function EmptyState({ title, description, action }) {
+  const { t } = useT();
   return (
-    <div className="empty-state-card">
-      <div className="empty-state-title">{title}</div>
+    <div role="status" className="empty-state-card">
+      <div className="empty-state-title">{title ?? t('noData')}</div>
       {description && <p className="empty-state-desc">{description}</p>}
       {action}
     </div>

@@ -1,3 +1,4 @@
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useEffect, useState } from 'react';
 import { Modal } from './ui/modal.jsx';
 import { cn } from '../lib/cn.js';
@@ -21,6 +22,7 @@ export default function PasteDataModal({
   busy,
   defaultFormat = 'json',
 }) {
+  useT();
   const [format, setFormat] = useState(defaultFormat);
   const [text, setText] = useState('');
   const [localError, setLocalError] = useState('');
@@ -35,7 +37,7 @@ export default function PasteDataModal({
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed) {
-      setLocalError('请粘贴数据内容');
+      setLocalError(tx("请粘贴数据内容"));
       return;
     }
     setLocalError('');
@@ -46,7 +48,7 @@ export default function PasteDataModal({
   const footer = (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-[11px] text-muted-foreground">
-        {text.length ? `${text.length.toLocaleString()} 字符` : '支持从剪贴板粘贴大段文本'}
+        {text.length ? tx("{0} 字符", {0: text.length.toLocaleString()}) : tx("支持从剪贴板粘贴大段文本")}
       </p>
       <div className="flex gap-2">
         <button
@@ -54,17 +56,13 @@ export default function PasteDataModal({
           className="h-9 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted"
           onClick={onClose}
           disabled={busy}
-        >
-          取消
-        </button>
+        > {tx("取消")} </button>
         <button
           type="button"
           className="h-9 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"
           disabled={busy || !text.trim()}
           onClick={submit}
-        >
-          开始分析
-        </button>
+        > {tx("开始分析")} </button>
       </div>
     </div>
   );
@@ -73,21 +71,21 @@ export default function PasteDataModal({
     <Modal
       open={open}
       onClose={busy ? undefined : onClose}
-      title="粘贴数据"
-      description="选择格式后粘贴内容，将作为数据源进行分析。"
+      title={tx("粘贴数据")}
+      description={tx("选择格式后粘贴内容，将作为数据源进行分析。")}
       size="xl"
       footer={footer}
     >
       <div className="space-y-4">
         <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground">数据格式</div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground"> {tx("数据格式")} </div>
           <div className="flex flex-wrap gap-1.5">
             {PASTE_FORMATS.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 disabled={busy}
-                title={f.hint}
+                title={tx(f.hint)}
                 onClick={() => setFormat(f.key)}
                 className={cn(
                   'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
@@ -96,18 +94,18 @@ export default function PasteDataModal({
                     : 'bg-muted text-muted-foreground hover:text-foreground',
                 )}
               >
-                {f.label}
+                {tx(f.label)}
               </button>
             ))}
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">
-            {PASTE_FORMATS.find((f) => f.key === format)?.hint}
+            {tx(PASTE_FORMATS.find((f) => f.key === format)?.hint)}
           </p>
         </div>
 
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-muted-foreground">内容</span>
+            <span className="text-xs font-medium text-muted-foreground"> {tx("内容")} </span>
             <button
               type="button"
               className="text-[11px] text-primary hover:underline disabled:opacity-40"
@@ -119,15 +117,13 @@ export default function PasteDataModal({
                     setText(clip);
                     setLocalError('');
                   } else {
-                    setLocalError('剪贴板为空');
+                    setLocalError(tx("剪贴板为空"));
                   }
                 } catch {
-                  setLocalError('无法读取剪贴板，请手动粘贴到下方');
+                  setLocalError(tx("无法读取剪贴板，请手动粘贴到下方"));
                 }
               }}
-            >
-              从剪贴板填入
-            </button>
+            > {tx("从剪贴板填入")} </button>
           </div>
           <textarea
             className="min-h-[220px] w-full resize-y rounded-xl border border-border bg-muted/40 p-3 font-mono text-[12px] leading-relaxed text-foreground outline-none focus:border-primary/40"
@@ -136,7 +132,7 @@ export default function PasteDataModal({
                 ? 'name,age\nAlice,30\n...'
                 : format === 'jsonl'
                   ? '{"id":1}\n{"id":2}\n...'
-                  : '在此粘贴数据…'
+                  : tx("在此粘贴数据…")
             }
             value={text}
             onChange={(e) => {
@@ -145,7 +141,7 @@ export default function PasteDataModal({
             }}
             spellCheck={false}
             disabled={busy}
-            autoFocus
+            data-autofocus
           />
           {localError ? (
             <div className="mt-2 text-xs text-danger">{localError}</div>

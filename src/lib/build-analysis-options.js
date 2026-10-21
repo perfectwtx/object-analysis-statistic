@@ -1,7 +1,8 @@
 import { toAnalyzeRequestOptions } from './analyzeOptions.js';
 
 export function buildAnalysisOptions({ rules, features, csvInfer, runtime }) {
-  const { flatten, selectedFields, filter, ...body } = rules || {};
+  const { flatten: ruleFlatten, selectedFields, filter, ...body } = rules || {};
+  const flatten = ruleFlatten ?? rules?.runtime?.flatten ?? runtime?.flatten;
   const options = toAnalyzeRequestOptions(runtime);
   return {
     ...options, flatten, rulesJson: rules ? JSON.stringify(body) : null,

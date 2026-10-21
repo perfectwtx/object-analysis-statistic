@@ -1,3 +1,4 @@
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useMemo, useState } from 'react';
 import { cn } from '../lib/cn.js';
 import VisualExpectations from './VisualExpectations.jsx';
@@ -125,21 +126,21 @@ function objFromRule(form) {
 
 function summaryOf(rule) {
   const bits = [];
-  if (rule.required) bits.push('必填');
-  if (rule.unique) bits.push('唯一');
-  if (rule.redact === true) bits.push('强制打码');
-  if (rule.redact === false) bits.push('不打码');
+  if (rule.required) bits.push(tx("必填"));
+  if (rule.unique) bits.push(tx("唯一"));
+  if (rule.redact === true) bits.push(tx("强制打码"));
+  if (rule.redact === false) bits.push(tx("不打码"));
   if (rule.pii) bits.push('PII');
-  if (rule.transform?.type) bits.push(`转换:${rule.transform.type}`);
+  if (rule.transform?.type) bits.push(tx("转换:{0}", {0: rule.transform.type}));
   else if (rule.transform?.parse) bits.push(`parse:${rule.transform.parse}`);
-  if (Array.isArray(rule.enumValues) && rule.enumValues.length) bits.push(`枚举×${rule.enumValues.length}`);
-  if (rule.pattern) bits.push('正则');
+  if (Array.isArray(rule.enumValues) && rule.enumValues.length) bits.push(tx("枚举×{0}", {0: rule.enumValues.length}));
+  if (rule.pattern) bits.push(tx("正则"));
   if (rule.minValue != null) bits.push(`≥${rule.minValue}`);
   if (rule.maxValue != null) bits.push(`≤${rule.maxValue}`);
-  if (rule.nullRateMax != null) bits.push(`空≤${rule.nullRateMax}`);
-  if (rule.maxOutlierRatio != null) bits.push(`异常≤${rule.maxOutlierRatio}`);
+  if (rule.nullRateMax != null) bits.push(tx("空≤{0}", {0: rule.nullRateMax}));
+  if (rule.maxOutlierRatio != null) bits.push(tx("异常≤{0}", {0: rule.maxOutlierRatio}));
   if (rule.primaryType) bits.push(rule.primaryType);
-  return bits.length ? bits.join(' · ') : '未配置属性';
+  return bits.length ? bits.join(' · ') : tx("未配置属性");
 }
 
 function ChipGroup({ options, value, onChange, busy }) {
@@ -147,7 +148,7 @@ function ChipGroup({ options, value, onChange, busy }) {
     <div className="flex flex-wrap gap-1.5">
       {options.map((o) => {
         const v = typeof o === 'string' ? o : o.value;
-        const label = typeof o === 'string' ? (o || '默认') : o.label;
+        const label = typeof o === 'string' ? (o || tx("默认")) : o.label;
         return (
           <button key={v || 'none'} type="button" disabled={busy} onClick={() => onChange(v)} className={cn('rounded-full px-2.5 py-1 text-xs font-medium transition-colors', (value || '') === v ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground')}>
             {label}
@@ -159,6 +160,7 @@ function ChipGroup({ options, value, onChange, busy }) {
 }
 
 export default function VisualFieldRules({ text, setText, busy, sampleFields }) {
+  useT();
   const parsed = useMemo(() => parseFieldsFromText(text), [text]);
   const parseError = parsed === null;
   const [expanded, setExpanded] = useState(null);
@@ -212,37 +214,29 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
 
   if (parseError) {
     return (
-      <div className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-6 text-center text-sm text-danger">
-        当前规则 JSON 无法解析，请先切到「JSON」修复后再用可视化编辑。
-      </div>
+      <div className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-6 text-center text-sm text-danger"> {tx("当前规则 JSON 无法解析，请先切到「JSON」修复后再用可视化编辑。")} </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">
-        对齐后端 FieldRule：质量校验、transform、PII、valueParsers、expectations。修改实时写回 JSON。
-      </p>
+      <p className="text-xs text-muted-foreground"> {tx("对齐后端 FieldRule：质量校验、transform、PII、valueParsers、expectations。修改实时写回 JSON。")} </p>
 
       {sampleFields?.length ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2">
-          <span className="text-xs text-muted-foreground">
-            预处理/分析发现 <strong className="text-foreground">{sampleFields.length}</strong> 个字段
-            {missingSample.length ? `（其中 ${missingSample.length} 个尚未写入规则）` : '（均已在规则中）'}
+          <span className="text-xs text-muted-foreground"> {tx("预处理/分析发现")} <strong className="text-foreground">{sampleFields.length}</strong> {tx("个字段")} {missingSample.length ? tx("（其中 {0} 个尚未写入规则）", {0: missingSample.length}) : tx("（均已在规则中）")}
           </span>
-          <button type="button" disabled={busy || missingSample.length === 0} onClick={importSampleFields} className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">
-            填入规则
-          </button>
+          <button type="button" disabled={busy || missingSample.length === 0} onClick={importSampleFields} className="h-8 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"> {tx("填入规则")} </button>
         </div>
       ) : null}
 
       <div className="flex gap-2">
-        <input className="h-10 flex-1 rounded-lg border border-border bg-muted/40 px-3 text-sm outline-none focus:border-primary/40" placeholder="新字段名，如 email 或 address.city" value={newName} disabled={busy} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addField(); } }} />
-        <button type="button" disabled={busy || !newName.trim()} onClick={() => addField()} className="h-10 shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40">添加字段</button>
+        <input className="h-10 flex-1 rounded-lg border border-border bg-muted/40 px-3 text-sm outline-none focus:border-primary/40" placeholder={tx("新字段名，如 email 或 address.city")} value={newName} disabled={busy} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addField(); } }} />
+        <button type="button" disabled={busy || !newName.trim()} onClick={() => addField()} className="h-10 shrink-0 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"> {tx("添加字段")} </button>
       </div>
 
       {entries.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">还没有字段规则。可从预处理结果「填入规则」，或手动添加字段名。</div>
+        <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground"> {tx("还没有字段规则。可从预处理结果「填入规则」，或手动添加字段名。")} </div>
       ) : (
         <ul className="space-y-2">
           {entries.map(({ name, rule }) => {
@@ -257,50 +251,50 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
                     <span className="block truncate font-mono text-sm font-medium">{name}</span>
                     <span className="block truncate text-[11px] text-muted-foreground">{summaryOf(rule)}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">{open ? '收起' : '配置'}</span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">{open ? tx("收起") : tx("配置")}</span>
                 </button>
                 {open ? (
                   <div className="space-y-4 border-t border-border px-3 py-3">
                     <div className="flex flex-wrap items-end gap-2">
                       <label className="min-w-[160px] flex-1">
-                        <span className="mb-1 block text-[11px] text-muted-foreground">字段名</span>
+                        <span className="mb-1 block text-[11px] text-muted-foreground"> {tx("字段名")} </span>
                         <input className="h-9 w-full rounded-lg border border-border bg-background px-2.5 font-mono text-sm outline-none focus:border-primary/40" value={draftName} disabled={busy} onChange={(e) => setDraftName(e.target.value)} onBlur={() => renameField(name, draftName)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); renameField(name, draftName); } }} />
                       </label>
-                      <button type="button" className="h-9 rounded-lg px-3 text-xs text-danger hover:bg-danger/10" disabled={busy} onClick={() => removeField(name)}>删除字段</button>
+                      <button type="button" className="h-9 rounded-lg px-3 text-xs text-danger hover:bg-danger/10" disabled={busy} onClick={() => removeField(name)}> {tx("删除字段")} </button>
                     </div>
 
                     <div>
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">质量校验</div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground"> {tx("质量校验")} </div>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {[{ key: 'required', label: '必填', hint: '缺失或 null 违规' }, { key: 'unique', label: '唯一', hint: '非空值不可重复' }].map((a) => (
+                        {[{ key: 'required', label: tx("必填"), hint: tx("缺失或 null 违规") }, { key: 'unique', label: tx("唯一"), hint: tx("非空值不可重复") }].map((a) => (
                           <label key={a.key} className={cn('flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5', rule[a.key] ? 'border-primary/40 bg-primary/5' : 'border-border bg-background')}>
                             <input type="checkbox" className="mt-0.5 size-4 rounded border-border" checked={!!rule[a.key]} disabled={busy} onChange={(e) => updateField(name, { ...rule, [a.key]: e.target.checked })} />
-                            <span><span className="text-sm font-medium">{a.label}</span><span className="mt-0.5 block text-[11px] text-muted-foreground">{a.hint}</span></span>
+                            <span><span className="text-sm font-medium">{tx(a.label)}</span><span className="mt-0.5 block text-[11px] text-muted-foreground">{tx(a.hint)}</span></span>
                           </label>
                         ))}
                       </div>
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground">最小值</span><input type="number" className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={rule.minValue ?? ''} onChange={(e) => updateField(name, { ...rule, minValue: e.target.value === '' ? undefined : e.target.value })} /></label>
-                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground">最大值</span><input type="number" className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={rule.maxValue ?? ''} onChange={(e) => updateField(name, { ...rule, maxValue: e.target.value === '' ? undefined : e.target.value })} /></label>
-                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground">空值率上限</span><input type="number" min={0} max={1} step={0.05} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" placeholder="0.2" disabled={busy} value={rule.nullRateMax ?? ''} onChange={(e) => updateField(name, { ...rule, nullRateMax: e.target.value === '' ? undefined : e.target.value })} /></label>
-                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground">异常值比例上限</span><input type="number" min={0} max={1} step={0.05} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" placeholder="0.1" disabled={busy} value={rule.maxOutlierRatio ?? ''} onChange={(e) => updateField(name, { ...rule, maxOutlierRatio: e.target.value === '' ? undefined : e.target.value })} /></label>
+                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("最小值")} </span><input type="number" className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={rule.minValue ?? ''} onChange={(e) => updateField(name, { ...rule, minValue: e.target.value === '' ? undefined : e.target.value })} /></label>
+                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("最大值")} </span><input type="number" className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={rule.maxValue ?? ''} onChange={(e) => updateField(name, { ...rule, maxValue: e.target.value === '' ? undefined : e.target.value })} /></label>
+                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("空值率上限")} </span><input type="number" min={0} max={1} step={0.05} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" placeholder="0.2" disabled={busy} value={rule.nullRateMax ?? ''} onChange={(e) => updateField(name, { ...rule, nullRateMax: e.target.value === '' ? undefined : e.target.value })} /></label>
+                        <label className="block rounded-lg border border-border bg-background p-3"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("异常值比例上限")} </span><input type="number" min={0} max={1} step={0.05} className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" placeholder="0.1" disabled={busy} value={rule.maxOutlierRatio ?? ''} onChange={(e) => updateField(name, { ...rule, maxOutlierRatio: e.target.value === '' ? undefined : e.target.value })} /></label>
                         <div className="rounded-lg border border-border bg-background p-3 sm:col-span-2">
-                          <span className="mb-1.5 block text-[11px] text-muted-foreground">正则 pattern</span>
+                          <span className="mb-1.5 block text-[11px] text-muted-foreground"> {tx("正则 pattern")} </span>
                           <div className="mb-2 flex flex-wrap gap-1.5">
                             {PATTERN_PRESETS.map((preset) => (
-                              <button key={preset.label} type="button" disabled={busy} className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: preset.pattern })}>{preset.label}</button>
+                              <button key={tx(preset.label)} type="button" disabled={busy} className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: preset.pattern })}>{tx(preset.label)}</button>
                             ))}
                             {rule.pattern ? (
-                              <button type="button" disabled={busy} className="rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-danger/15 disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: undefined })}>清除</button>
+                              <button type="button" disabled={busy} className="rounded-full bg-danger/10 px-2.5 py-1 text-[11px] font-medium text-danger hover:bg-danger/15 disabled:opacity-40" onClick={() => updateField(name, { ...rule, pattern: undefined })}> {tx("清除")} </button>
                             ) : null}
                           </div>
-                          <input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-xs outline-none focus:border-primary/40" placeholder="点击上方预设，或手写正则" disabled={busy} value={rule.pattern ?? ''} onChange={(e) => updateField(name, { ...rule, pattern: e.target.value || undefined })} />
+                          <input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-xs outline-none focus:border-primary/40" placeholder={tx("点击上方预设，或手写正则")} disabled={busy} value={rule.pattern ?? ''} onChange={(e) => updateField(name, { ...rule, pattern: e.target.value || undefined })} />
                         </div>
                       </div>
                       <div className="mt-2 rounded-lg border border-border bg-background p-3">
                         <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-medium">枚举 enumValues</span>
-                          <button type="button" disabled={busy} className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', Array.isArray(rule.enumValues) ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')} onClick={() => updateField(name, { ...rule, enumValues: Array.isArray(rule.enumValues) ? undefined : [''] })}>{Array.isArray(rule.enumValues) ? '已启用' : '启用'}</button>
+                          <span className="text-sm font-medium"> {tx("枚举 enumValues")} </span>
+                          <button type="button" disabled={busy} className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', Array.isArray(rule.enumValues) ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')} onClick={() => updateField(name, { ...rule, enumValues: Array.isArray(rule.enumValues) ? undefined : [''] })}>{Array.isArray(rule.enumValues) ? tx("已启用") : tx("启用")}</button>
                         </div>
                         {Array.isArray(rule.enumValues) ? (
                           <textarea className="min-h-[64px] w-full resize-y rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs outline-none" placeholder="Male, Female" disabled={busy} value={(rule.enumValues || []).join(', ')} onChange={(e) => { const parts = e.target.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean); updateField(name, { ...rule, enumValues: parts.length ? parts : [''] }); }} />
@@ -309,46 +303,46 @@ export default function VisualFieldRules({ text, setText, busy, sampleFields }) 
                     </div>
 
                     <div>
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">类型覆盖</div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground"> {tx("类型覆盖")} </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div className="rounded-lg border border-border bg-background p-3">
-                          <div className="mb-1.5 text-[11px] text-muted-foreground">主导类型 primaryType</div>
-                          <ChipGroup options={PRIMARY_TYPES.map((t) => ({ value: t, label: t || '自动' }))} value={rule.primaryType || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, primaryType: v || undefined })} />
+                          <div className="mb-1.5 text-[11px] text-muted-foreground"> {tx("主导类型 primaryType")} </div>
+                          <ChipGroup options={PRIMARY_TYPES.map((t) => ({ value: t, label: t || tx("自动") }))} value={rule.primaryType || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, primaryType: v || undefined })} />
                         </div>
                         <label className="block rounded-lg border border-border bg-background p-3">
-                          <span className="mb-1 block text-[11px] text-muted-foreground">默认值 defaultValue</span>
+                          <span className="mb-1 block text-[11px] text-muted-foreground"> {tx("默认值 defaultValue")} </span>
                           <input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none" disabled={busy} value={rule.defaultValue ?? ''} onChange={(e) => updateField(name, { ...rule, defaultValue: e.target.value || undefined })} />
                         </label>
                       </div>
                     </div>
 
                     <div>
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">转换 / 加解密 transform</div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground"> {tx("转换 / 加解密 transform")} </div>
                       <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                        <div><div className="mb-1.5 text-[11px] text-muted-foreground">类型 type</div><ChipGroup options={TRANSFORM_TYPES} value={tf.type || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, type: v || undefined } })} /></div>
-                        <div><div className="mb-1.5 text-[11px] text-muted-foreground">转换后再展开 parse</div><ChipGroup options={PARSE_AFTER} value={tf.parse || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, parse: v || undefined } })} /></div>
+                        <div><div className="mb-1.5 text-[11px] text-muted-foreground"> {tx("类型 type")} </div><ChipGroup options={TRANSFORM_TYPES} value={tf.type || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, type: v || undefined } })} /></div>
+                        <div><div className="mb-1.5 text-[11px] text-muted-foreground"> {tx("转换后再展开 parse")} </div><ChipGroup options={PARSE_AFTER} value={tf.parse || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, parse: v || undefined } })} /></div>
                         {tf.type === 'jwt' ? (<label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">JWT claim</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-sm outline-none" placeholder="sub" disabled={busy} value={tf.claim || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, claim: e.target.value || undefined } })} /></label>) : null}
                         {(tf.type === 'aes' || tf.type === 'sm4') ? (
                           <div className="grid gap-2 sm:grid-cols-2">
-                            <label className="block sm:col-span-2"><span className="mb-1 block text-[11px] text-muted-foreground">密钥 key</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-xs outline-none" disabled={busy} value={tf.key || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, key: e.target.value || undefined } })} /></label>
+                            <label className="block sm:col-span-2"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("密钥 key")} </span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-xs outline-none" disabled={busy} value={tf.key || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, key: e.target.value || undefined } })} /></label>
                             <label className="block sm:col-span-2"><span className="mb-1 block text-[11px] text-muted-foreground">IV</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-xs outline-none" disabled={busy} value={tf.iv || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, iv: e.target.value || undefined } })} /></label>
-                            <div><div className="mb-1 text-[11px] text-muted-foreground">mode</div><ChipGroup options={AES_MODES.map((m) => ({ value: m, label: m || '默认' }))} value={tf.mode || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, mode: v || undefined } })} /></div>
-                            <div><div className="mb-1 text-[11px] text-muted-foreground">padding</div><ChipGroup options={AES_PADDING.map((m) => ({ value: m, label: m || '默认' }))} value={tf.padding || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, padding: v || undefined } })} /></div>
-                            <div className="sm:col-span-2"><div className="mb-1 text-[11px] text-muted-foreground">format</div><ChipGroup options={KEY_FORMATS.map((m) => ({ value: m, label: m || '默认 base64' }))} value={tf.format || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, format: v || undefined } })} /></div>
+                            <div><div className="mb-1 text-[11px] text-muted-foreground">mode</div><ChipGroup options={AES_MODES.map((m) => ({ value: m, label: m || tx("默认") }))} value={tf.mode || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, mode: v || undefined } })} /></div>
+                            <div><div className="mb-1 text-[11px] text-muted-foreground">padding</div><ChipGroup options={AES_PADDING.map((m) => ({ value: m, label: m || tx("默认") }))} value={tf.padding || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, padding: v || undefined } })} /></div>
+                            <div className="sm:col-span-2"><div className="mb-1 text-[11px] text-muted-foreground">format</div><ChipGroup options={KEY_FORMATS.map((m) => ({ value: m, label: m || tx("默认 base64") }))} value={tf.format || ''} busy={busy} onChange={(v) => updateField(name, { ...rule, _tf: { ...tf, format: v || undefined } })} /></div>
                           </div>
                         ) : null}
                         {tf.type === 'sm2' ? (
                           <div className="grid gap-2">
-                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">私钥 privateKey</span><textarea className="min-h-[56px] w-full rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs outline-none" disabled={busy} value={tf.privateKey || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, privateKey: e.target.value || undefined } })} /></label>
-                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">公钥 publicKey</span><textarea className="min-h-[56px] w-full rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs outline-none" disabled={busy} value={tf.publicKey || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, publicKey: e.target.value || undefined } })} /></label>
-                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground">签名 signature</span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-xs outline-none" disabled={busy} value={tf.signature || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, signature: e.target.value || undefined } })} /></label>
+                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("私钥 privateKey")} </span><textarea className="min-h-[56px] w-full rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs outline-none" disabled={busy} value={tf.privateKey || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, privateKey: e.target.value || undefined } })} /></label>
+                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("公钥 publicKey")} </span><textarea className="min-h-[56px] w-full rounded-lg border border-border bg-muted/30 p-2 font-mono text-xs outline-none" disabled={busy} value={tf.publicKey || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, publicKey: e.target.value || undefined } })} /></label>
+                            <label className="block"><span className="mb-1 block text-[11px] text-muted-foreground"> {tx("签名 signature")} </span><input className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 font-mono text-xs outline-none" disabled={busy} value={tf.signature || ''} onChange={(e) => updateField(name, { ...rule, _tf: { ...tf, signature: e.target.value || undefined } })} /></label>
                           </div>
                         ) : null}
                       </div>
                     </div>
 
                     <div>
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">PII / 打码</div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground"> {tx("PII / 打码")} </div>
                       <PiiMaskEditor pii={pii} busy={busy} redact={rule.redact} onChange={(nextPii) => updateField(name, { ...rule, _pii: nextPii })} onRedactChange={(v) => updateField(name, { ...rule, redact: v })} />
                     </div>
                   </div>

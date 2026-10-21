@@ -3,7 +3,7 @@ import Sparkline from './Sparkline.jsx';
 import {
   TableShell, Table, THead, TH, TBody, TR, TD, EmptyRow,
 } from './ui/data-table.jsx';
-import { useT } from '../lib/i18n.js';
+import { translate as tx, useT } from '../lib/i18n.js';
 
 const PAGE = 20;
 const RULE_KEY_LABELS = {

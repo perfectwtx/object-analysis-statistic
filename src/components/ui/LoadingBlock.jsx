@@ -1,8 +1,10 @@
-export default function LoadingBlock({ label = '加载中…' }) {
+import { useT } from '../../lib/i18n.js';
+export default function LoadingBlock({ label }) {
+  const { t } = useT();
   return (
-    <div className="loading-block">
+    <div role="status" aria-live="polite" className="loading-block">
       <span className="spinner" />
-      <span>{label}</span>
+      <span>{label ?? t('loading')}</span>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import {
 } from 'recharts';
 import { labelLayout, shortenLabel } from '../utils.js';
 import { chartColors, useTheme } from '../theme.js';
-import { useT } from '../lib/i18n.js';
+import { translate as tx, useT } from '../lib/i18n.js';
 
 export default function CoverageChart({ fields }) {
   const { t } = useT();
@@ -62,7 +62,7 @@ export default function CoverageChart({ fields }) {
               fontSize: 12,
             }}
           />
-          <Bar dataKey="覆盖率" fill="url(#covGrad)" radius={[6, 6, 0, 0]} maxBarSize={36} />
+          <Bar dataKey={tx("覆盖率")} fill="url(#covGrad)" radius={[6, 6, 0, 0]} maxBarSize={36} />
         </BarChart>
       </ResponsiveContainer>
     </div>

@@ -1,4 +1,5 @@
 import { usePlatform } from './store.js';
+import { WORKBENCH_EN } from './workbench-copy.js';
 
 const DICT = {
   zh: {
@@ -33,7 +34,7 @@ const DICT = {
     langZh: '中文',
     langEn: 'English',
     backendOnline: '后端已连接',
-    backendOffline: '演示模式',
+    backendOffline: '后端离线',
     backendPartial: '部分接口演示',
     backendFailHint: '无法连接后端，页面使用演示数据',
     backendOnlinePartial: '后端在线 · 部分接口演示',
@@ -246,7 +247,7 @@ const DICT = {
     langZh: '中文',
     langEn: 'English',
     backendOnline: 'API connected',
-    backendOffline: 'Demo mode',
+    backendOffline: 'Backend offline',
     backendPartial: 'Partial demo APIs',
     backendFailHint: 'API unreachable · showing demo data',
     backendOnlinePartial: 'API online · partial demo',
@@ -434,10 +435,14 @@ export const LOCALES = [
   { key: 'en', label: 'English' },
 ];
 
-export function t(locale, key) {
+export function t(locale, key, values = {}) {
+  if (typeof key !== 'string') return key;
   const bag = DICT[locale] || DICT.zh;
-  return bag[key] ?? DICT.zh[key] ?? key;
+  const prefix = locale === 'en' && !WORKBENCH_EN[key] ? Object.keys(WORKBENCH_EN).find((source) => source.endsWith('：') && key.startsWith(source)) : undefined;
+  const text = bag[key] ?? (locale === 'en' ? WORKBENCH_EN[key] ?? (prefix ? WORKBENCH_EN[prefix] + key.slice(prefix.length) : undefined) : undefined) ?? DICT.zh[key] ?? key;
+  return text.replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
 }
+export const translate = (text, values) => t(usePlatform.getState().locale, text, values);
 
 export function getDict(locale) {
   return DICT[locale] || DICT.zh;
@@ -448,6 +453,6 @@ export function useT() {
   const locale = usePlatform((s) => s.locale) || 'zh';
   return {
     locale,
-    t: (key) => t(locale, key),
+    t: (key, values) => t(locale, key, values),
   };
 }

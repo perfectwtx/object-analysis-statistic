@@ -1,3 +1,4 @@
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useMemo } from 'react';
 import { parseJsonc } from '../utils.js';
 
@@ -38,26 +39,25 @@ function writeExpectationsIntoText(text, expectations) {
 }
 
 export default function VisualExpectations({ text, setText, busy }) {
+  useT();
   const expectations = useMemo(() => parseExpectations(text), [text]);
 
   return (
     <section className="rounded-xl border border-border bg-muted/20 p-3">
-      <h3 className="text-sm font-medium">数据集期望 expectations</h3>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        仅支持后端 AnalysisExpectations：minRowCount、maxDuplicateRate。
-      </p>
+      <h3 className="text-sm font-medium"> {tx("数据集期望 expectations")} </h3>
+      <p className="mt-1 text-[11px] text-muted-foreground"> {tx("仅支持后端 AnalysisExpectations：minRowCount、maxDuplicateRate。")} </p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {EXPECTATION_DEFS.map((d) => (
           <label key={d.key} className="block">
             <span className="mb-1 flex items-baseline justify-between gap-2">
-              <span className="text-xs font-medium">{d.label}</span>
-              <span className="text-[10px] text-muted-foreground">{d.hint}</span>
+              <span className="text-xs font-medium">{tx(d.label)}</span>
+              <span className="text-[10px] text-muted-foreground">{tx(d.hint)}</span>
             </span>
             <input
               type="number"
               step="any"
               className="h-9 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus:border-primary/40"
-              placeholder={d.placeholder}
+              placeholder={tx(d.placeholder)}
               disabled={busy}
               value={expectations[d.key] ?? ''}
               onChange={(e) => {

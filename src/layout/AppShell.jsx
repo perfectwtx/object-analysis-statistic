@@ -5,6 +5,7 @@ import { TopNav } from '../components/layout/TopNav.jsx';
 import { hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
 import ProductTour from '../components/tour/ProductTour.jsx';
+import { t } from '../lib/i18n.js';
 import { routeEnabled } from '../lib/capabilities.js';
 
 export default function AppShell() {
@@ -17,6 +18,7 @@ export default function AppShell() {
   const source = usePlatform((s) => s.source);
   const error = usePlatform((s) => s.error);
   const locale = usePlatform((s) => s.locale);
+  const moduleLabels = { jobs: 'jobs', issues: 'issues', snapshots: 'qualityTitle', trend: 'trend', dashboard: 'qualityTitle', baselines: 'baselines', alerts: 'alerts' };
   const capabilities = usePlatform((s) => s.capabilities);
 
   useEffect(() => {
@@ -32,11 +34,11 @@ export default function AppShell() {
           <div role="status" className="mb-4 rounded-lg border border-border bg-muted p-3 text-sm text-muted-foreground">
             {source === 'demo'
               ? locale === 'en' ? 'Demo mode: all platform metrics are sample data. Alert changes are local only.' : '演示模式：平台指标均为样例数据，告警切换仅在本地生效。'
-              : error}
+              : Object.entries(modules).filter(([, m]) => m.error).map(([name, m]) => t(locale, moduleLabels[name]) + ': ' + (m.source === 'unavailable' ? t(locale, 'apiReadyLater') : m.error)).join(' · ') || error}
             {source !== 'demo' && Object.entries(modules).filter(([, m]) => m.error).map(([name]) => (
               <button key={name} type="button" disabled={loading} className="ml-3 underline disabled:opacity-50"
                 onClick={() => retry({ module: name })}>
-                {locale === 'en' ? 'Retry' : '重试'} · {name}
+                {t(locale, 'retry')} · {t(locale, moduleLabels[name])}
               </button>
             ))}
           </div>

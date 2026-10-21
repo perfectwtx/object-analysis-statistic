@@ -1,3 +1,6 @@
+import { readRuntimeFromRulesText } from '../components/RulesConfigModal.jsx';
+import { useSidebarWidth } from '../hooks/useSidebarWidth.js';
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReportExport } from '../hooks/useReportExport.js';
 import {
@@ -53,6 +56,7 @@ function kb(b) {
 }
 
 export default function Workbench() {
+  useT();
   const [source, setSource] = useState(null);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
@@ -78,11 +82,7 @@ export default function Workbench() {
   const [pasteOpen, setPasteOpen] = useState(false);
   const [lastSampleFields, setLastSampleFields] = useState([]);
   const [exportOpen, setExportOpen] = useState(false);
-  const [sidebarW, setSidebarW] = useState(() => {
-    const saved = Number(localStorage.getItem('wbSidebarW'));
-    return saved >= 240 && saved <= 640 ? saved : 320;
-  });
-  const dragState = useRef(null);
+  const { sidebarW, onResizeStart, onResizeKeyDown } = useSidebarWidth();
 
   const {
     phase, busy, progress, result: asyncResult, error: asyncError, jobId,
@@ -116,24 +116,6 @@ export default function Workbench() {
   };
   const toggleCsvInfer = () => {
     setCsvInfer((v) => { localStorage.setItem(CSV_INFER_KEY, String(!v)); return !v; });
-  };
-
-  const onResizeStart = (e) => {
-    e.preventDefault();
-    dragState.current = { startX: e.clientX, startW: sidebarW };
-    document.body.classList.add('col-resizing');
-    const onMove = (ev) => {
-      const { startX, startW } = dragState.current;
-      setSidebarW(Math.min(640, Math.max(240, startW + ev.clientX - startX)));
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      document.body.classList.remove('col-resizing');
-      setSidebarW((w) => { localStorage.setItem('wbSidebarW', String(w)); return w; });
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
   };
 
   const deepInsights = useMemo(() => {
@@ -171,7 +153,7 @@ export default function Workbench() {
   const runAnalysis = async ({ source: src = source, rules: activeRules = rules } = {}) => {
     if (!src?.file) return;
     setError('');
-    try { await prepare(src, buildAnalysisOptions({ rules: activeRules, features, csvInfer, runtime: analyzeOptions })); }
+    try { await prepare(src, buildAnalysisOptions({ rules: activeRules, features, csvInfer, runtime: { ...analyzeOptions, ...readRuntimeFromRulesText(rulesText) } })); }
     catch (e) { setError(e.message); }
   };
   const cancelAll = () => { cancelPreflight(); return cancelAnalysis(); };
@@ -182,14 +164,15 @@ export default function Workbench() {
 
   const applyRules = async () => {
     const check = await checkRules(rulesText);
-    if (!check) return;
-    if (!check.ok) { setRulesError('规则未通过校验，已取消分析'); return; }
-    if (check.empty) { ruleState.clear(); if (source) await runAnalysis({ source, rules: null }); return; }
+    if (!check) return false;
+    if (!check.ok) { setRulesError(tx("规则未通过校验，已取消分析")); return false; }
+    if (check.empty) { ruleState.clear(); if (source) await runAnalysis({ source, rules: null }); return true; }
     setRules(check.parsed); setRulesError('');
     if (source) await runAnalysis({ source, rules: check.parsed });
+    return true;
   };
-  const clearRules = () => {
-    ruleState.clear();
+  const clearRules = ({ rulesText: nextText } = {}) => {
+    ruleState.clear(nextText ? { rulesText: nextText } : undefined);
     if (source) return runAnalysis({ source, rules: null });
   };
 
@@ -204,16 +187,16 @@ export default function Workbench() {
   const submitPaste = async (text, format) => {
     const fmt = format || textFormat || 'json';
     setTextFormat(fmt);
-    const name = `粘贴的数据（${fmt}）`;
+    const name = tx("粘贴的数据（{0}）", {0: fmt});
     setFileName(name); setError('');
     const file = new File([text], `pasted.${fmt}`, { type: 'text/plain' });
     const src = { file, name }; setSource(src);
     await runAnalysis({ source: src });
   };
   const loadSample = async () => {
-    setFileName('内置样例数据'); setError('');
+    setFileName(tx("内置样例数据")); setError('');
     const file = new File([JSON.stringify(SAMPLE_DATA)], 'sample.json', { type: 'application/json' });
-    const src = { file, name: '内置样例数据' }; setSource(src);
+    const src = { file, name: tx("内置样例数据") }; setSource(src);
     await runAnalysis({ source: src });
   };
 
@@ -225,22 +208,22 @@ export default function Workbench() {
     try {
       parsed = parseJsonc(FULL_RULES_TEXT);
     } catch (e) {
-      setRulesError(`全量规则解析失败：${e.message}`);
+      setRulesError(tx("全量规则解析失败：{0}", {0: e.message}));
       return;
     }
     setRulesText(FULL_RULES_TEXT);
     setRules(parsed);
     setRulesCheck({ state: 'ok', fields: Object.keys(parsed?.fields || {}).length });
-    setFileName('全量样例数据');
+    setFileName(tx("全量样例数据"));
     const file = new File([JSON.stringify(FULL_SAMPLE_DATA, null, 2)], 'full-sample.json', { type: 'application/json' });
-    const src = { file, name: '全量样例数据' };
+    const src = { file, name: tx("全量样例数据") };
     setSource(src);
     await runAnalysis({ source: src, rules: parsed });
   };
 
   const { exporting, exportReport } = useReportExport({
     result, fileName, onClose: () => setExportOpen(false),
-    onError: (e) => setError('导出失败：' + e.message),
+    onError: (e) => setError(tx("导出失败：") + e.message),
   });
 
   return (
@@ -248,6 +231,7 @@ export default function Workbench() {
       busy={busy || preparing}
       sidebarW={sidebarW}
       onResizeStart={onResizeStart}
+      onResizeKeyDown={onResizeKeyDown}
       fileName={fileName}
       error={error}
       fileInput={fileInput}

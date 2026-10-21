@@ -59,7 +59,7 @@ export function TopNav() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl flex-wrap sm:flex-nowrap items-center gap-3 px-4 py-3 sm:px-6">
         <Link
           to="/"
           data-tour="logo"
@@ -119,6 +119,8 @@ export function TopNav() {
               setOpen(true);
             }}
             onFocus={() => setOpen(true)}
+            aria-label={t(locale, 'searchPlaceholder')}
+            onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); if (e.key === 'Enter' && hits[0]) { navigate(hits[0].to); setOpen(false); setQ(''); } }}
             placeholder={t(locale, 'searchPlaceholder')}
             className="h-10 w-full rounded-lg bg-muted pl-9 pr-3 text-sm text-foreground shadow-[var(--elev)] outline-none placeholder:text-muted-foreground"
           />
@@ -146,7 +148,7 @@ export function TopNav() {
         <BackendStatus className="hidden lg:inline-flex" />
         <div
           data-tour="theme-locale"
-          className="flex items-center gap-2 sm:gap-2.5"
+          className="ml-auto flex w-full sm:w-auto justify-end items-center gap-2 sm:gap-2.5"
         >
           <button
             type="button"

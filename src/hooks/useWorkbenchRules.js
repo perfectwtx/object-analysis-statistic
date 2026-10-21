@@ -24,7 +24,13 @@ export function useWorkbenchRules() {
     onSuccess: (result) => { setRulesCheck(result.empty ? null : result); return result; },
     onError: (e) => setRulesError(e.message),
   });
-  const clear = () => { request.cancel(); setRules(null); setRulesText(EMPTY_RULES); setRulesError(''); setRulesCheck(null); };
+  const clear = ({ rulesText: nextText } = {}) => {
+    let flatten = true;
+    try { const previous = parseJsonc(rulesText); flatten = previous?.runtime?.flatten ?? previous?.flatten ?? true; } catch { /* invalid draft */ }
+    request.cancel(); setRules(null);
+    setRulesText(nextText ?? JSON.stringify({ runtime: { flatten }, fields: {} }, null, 2));
+    setRulesError(''); setRulesCheck(null);
+  };
   const fetchReference = async () => {
     try {
       const ref = await fetchRulesReference();

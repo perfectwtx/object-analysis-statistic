@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useId, useRef } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus.js';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './button.jsx';
 import { cn } from '../../lib/cn.js';
@@ -21,27 +22,14 @@ export function ConfirmDialog({
 }) {
   const { t } = useT();
   const confirmRef = useRef(null);
+  const dialogRef = useDialogFocus({ open, onClose: loading ? undefined : onClose, initialFocus: confirmRef });
+  const titleId = useId(), descriptionId = useId();
 
   const resolvedTitle = title ?? t('confirmOk');
   const resolvedConfirm = confirmLabel ?? t('confirmDelete');
   const resolvedCancel = cancelLabel ?? t('confirmCancel');
   const processingLabel = t('processing');
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape' && !loading) onClose?.();
-    };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const timer = setTimeout(() => confirmRef.current?.focus?.(), 30);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open, onClose, loading]);
 
   if (!open) return null;
 
@@ -53,14 +41,17 @@ export function ConfirmDialog({
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
         aria-label={resolvedCancel}
+        tabIndex={-1}
         disabled={loading}
         onClick={() => !loading && onClose?.()}
       />
       <div
         role="alertdialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
-        aria-labelledby="oa-confirm-title"
-        aria-describedby="oa-confirm-desc"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
         className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--elev)]"
       >
         <div className="flex gap-4 px-5 pt-5 pb-2">
@@ -73,11 +64,11 @@ export function ConfirmDialog({
             <AlertTriangle className="size-5" aria-hidden />
           </div>
           <div className="min-w-0 flex-1 pt-0.5">
-            <h2 id="oa-confirm-title" className="text-base font-medium tracking-tight text-foreground">
+            <h2 id={titleId} className="text-base font-medium tracking-tight text-foreground">
               {resolvedTitle}
             </h2>
             {description ? (
-              <p id="oa-confirm-desc" className="mt-1.5 text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+              <p id={descriptionId} className="mt-1.5 text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
                 {description}
               </p>
             ) : null}

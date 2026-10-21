@@ -1,3 +1,4 @@
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useRef, useState } from 'react';
 import { toSchemaSnapshot, diffSnapshots } from '../schemaDiff.js';
 import { download } from '../exporters.js';
@@ -18,9 +19,9 @@ function InsightCard({ title, enabled = true, hint, empty, children }) {
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-medium tracking-tight">{title}</h3>
         {enabled ? (
-          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary" title="由 ObjectAnalyzer.Api（.NET）计算">后端</span>
+          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary" title={tx("由 ObjectAnalyzer.Api（.NET）计算")}> {tx("后端")} </span>
         ) : (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">未开启</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"> {tx("未开启")} </span>
         )}
       </div>
       <div className="mt-3">{body}</div>
@@ -46,19 +47,17 @@ const fmtDay = (s) => (s ? String(s).slice(0, 10) : '?');
 function TimeSeriesCard({ fields, timeSeries, trendEnabled }) {
   if (fields.length === 0) {
     return (
-      <InsightCard title="时间分布与趋势" enabled={trendEnabled}
-        hint="在左侧「深度分析」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。"
-        empty="数据中未识别到日期时间字段" />
+      <InsightCard title={tx("时间分布与趋势")} enabled={trendEnabled}
+        hint={tx("在左侧「深度分析」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。")}
+        empty={tx("数据中未识别到日期时间字段")} />
     );
   }
   const hasTrend = !!timeSeries && Object.keys(timeSeries).length > 0;
   return (
     <InsightCard title={`时间分布与趋势（${fields.length} 个时间字段）`} enabled={trendEnabled}
-      hint="在左侧「深度分析」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。">
+      hint={tx("在左侧「深度分析」中勾选「时间序列」后重新分析，可得到趋势、突发度、空档等统计。")}>
       {!hasTrend ? (
-        <div className="mb-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-          仅显示后端返回的日期分布直方图。勾选「时间序列」重新分析可得到趋势、突发度、空档等统计。
-        </div>
+        <div className="mb-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground"> {tx("仅显示后端返回的日期分布直方图。勾选「时间序列」重新分析可得到趋势、突发度、空档等统计。")} </div>
       ) : null}
       <div className="space-y-4">
         {fields.map((f) => {
@@ -80,14 +79,14 @@ function TimeSeriesCard({ fields, timeSeries, trendEnabled }) {
               </div>
               <Sparkline data={series} width={300} height={36} />
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Chip>{series.length} 桶</Chip><Chip>峰值 {peak}</Chip><Chip>n={t?.totalSamples ?? f.count}</Chip>
+                <Chip>{series.length} {tx("桶")} </Chip><Chip> {tx("峰值")} {peak}</Chip><Chip>n={t?.totalSamples ?? f.count}</Chip>
                 {t ? (
                   <>
-                    <Chip>斜率 {Number(t.trendSlope).toFixed(3)}</Chip>
+                    <Chip> {tx("斜率")} {Number(t.trendSlope).toFixed(3)}</Chip>
                     <Chip>R² {Number(t.trendRSquared).toFixed(2)}</Chip>
-                    <Chip>突发度 {Number(t.burstiness).toFixed(2)}</Chip>
-                    {t.longestGapBuckets > 0 ? <Chip warn>空档 {t.longestGapBuckets} 桶</Chip> : null}
-                    {t.emptyRatio > 0 ? <Chip warn>空桶 {(t.emptyRatio * 100).toFixed(0)}%</Chip> : null}
+                    <Chip> {tx("突发度")} {Number(t.burstiness).toFixed(2)}</Chip>
+                    {t.longestGapBuckets > 0 ? <Chip warn> {tx("空档")} {t.longestGapBuckets} {tx("桶")} </Chip> : null}
+                    {t.emptyRatio > 0 ? <Chip warn> {tx("空桶")} {(t.emptyRatio * 100).toFixed(0)}%</Chip> : null}
                   </>
                 ) : null}
               </div>
@@ -107,6 +106,7 @@ export const INSIGHT_FEATURES = [
 ];
 
 export default function InsightsPanel({ result, insights, features = {}, fileName }) {
+  useT();
   const [diff, setDiff] = useState(null);
   const [diffError, setDiffError] = useState('');
   const snapshotInput = useRef(null);
@@ -122,7 +122,7 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
     reader.onload = () => {
       try {
         const baseline = parseJsonc(String(reader.result));
-        if (!Array.isArray(baseline.fields)) throw new Error('不是有效的 Schema 快照');
+        if (!Array.isArray(baseline.fields)) throw new Error(tx("不是有效的 Schema 快照"));
         setDiff(diffSnapshots(baseline, toSchemaSnapshot(result, fileName)));
         setDiffError('');
       } catch (err) {
@@ -150,24 +150,22 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
       <InsightCard
         title={`字段相关性（${correlations?.fields?.length ?? 0} 个数值字段）`}
         enabled={enabledOf('correlations')}
-        hint={hintOf('enableCorrelation', '字段相关性')}
-        empty={topPairs.length === 0 ? '数值字段不足（需 ≥2 个数值字段且每字段样本 ≥3），无法计算相关性' : null}
+        hint={hintOf('enableCorrelation', tx("字段相关性"))}
+        empty={topPairs.length === 0 ? tx("数值字段不足（需 ≥2 个数值字段且每字段样本 ≥3），无法计算相关性") : null}
       >
         {(correlations?.strongPairs?.length ?? 0) > 0 ? (
-          <div className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
-            强相关（|r|≥0.7 且 n≥30）：{correlations.strongPairs.length} 对
-          </div>
+          <div className="mb-3 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary"> {tx("强相关（|r|≥0.7 且 n≥30）：")} {correlations.strongPairs.length} {tx("对")} </div>
         ) : null}
         {topPairs.length > 0 ? (
           <TableShell>
             <Table dense className="min-w-[420px]">
               <THead>
                 <tr>
-                  <TH>字段 A</TH>
-                  <TH>字段 B</TH>
+                  <TH> {tx("字段 A")} </TH>
+                  <TH> {tx("字段 B")} </TH>
                   <TH align="right">Pearson</TH>
                   <TH align="right">Spearman</TH>
-                  <TH align="right">样本</TH>
+                  <TH align="right"> {tx("样本")} </TH>
                 </tr>
               </THead>
               <TBody>
@@ -188,19 +186,19 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
         ) : null}
       </InsightCard>
 
-      <InsightCard title="字符串模式" enabled={enabledOf('patterns')} hint={hintOf('enableStringPatterns', '字符串模式')} empty={patternEntries.length === 0 ? '无字符串字段' : null}>
+      <InsightCard title={tx("字符串模式")} enabled={enabledOf('patterns')} hint={hintOf('enableStringPatterns', tx("字符串模式"))} empty={patternEntries.length === 0 ? tx("无字符串字段") : null}>
         <div className="space-y-2">
           {patternEntries.map(([field, p]) => (
             <div key={field} className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/30 px-3 py-2">
               <span className="font-mono text-xs">{field}</span>
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{p.dominantPattern?.template || '(空)'}</code>
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{p.dominantPattern?.template || tx("(空)")}</code>
               <span className="ml-auto tabular-nums text-xs text-muted-foreground">{((p.dominantPattern?.ratio ?? 0) * 100).toFixed(1)}%</span>
             </div>
           ))}
         </div>
       </InsightCard>
 
-      <InsightCard title="Unicode 卫生" enabled={enabledOf('hygiene')} hint={hintOf('enableUnicodeHygiene', 'Unicode 卫生')} empty={hygieneEntries.length === 0 ? '无字符串字段' : null}>
+      <InsightCard title={tx("Unicode 卫生")} enabled={enabledOf('hygiene')} hint={hintOf('enableUnicodeHygiene', tx("Unicode 卫生"))} empty={hygieneEntries.length === 0 ? tx("无字符串字段") : null}>
         <div className="space-y-2.5">
           {hygieneEntries.map(([field, h]) => {
             const score = h.hygieneScore ?? 0;
@@ -211,12 +209,12 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
                   <span className="font-mono text-xs">{field}</span>
                   <span className="tabular-nums text-xs font-medium">{score}</span>
                   <div className="flex flex-wrap gap-1">
-                    {h.fullwidth > 0 ? <Chip>全角×{h.fullwidth}</Chip> : null}
-                    {h.zeroWidth > 0 ? <Chip>零宽×{h.zeroWidth}</Chip> : null}
-                    {h.invisible > 0 ? <Chip>不可见×{h.invisible}</Chip> : null}
-                    {h.control > 0 ? <Chip>控制符×{h.control}</Chip> : null}
-                    {h.bidi > 0 ? <Chip>双向×{h.bidi}</Chip> : null}
-                    {h.whitespace > 0 ? <Chip>首尾空白×{h.whitespace}</Chip> : null}
+                    {h.fullwidth > 0 ? <Chip> {tx("全角×")} {h.fullwidth}</Chip> : null}
+                    {h.zeroWidth > 0 ? <Chip> {tx("零宽×")} {h.zeroWidth}</Chip> : null}
+                    {h.invisible > 0 ? <Chip> {tx("不可见×")} {h.invisible}</Chip> : null}
+                    {h.control > 0 ? <Chip> {tx("控制符×")} {h.control}</Chip> : null}
+                    {h.bidi > 0 ? <Chip> {tx("双向×")} {h.bidi}</Chip> : null}
+                    {h.whitespace > 0 ? <Chip> {tx("首尾空白×")} {h.whitespace}</Chip> : null}
                   </div>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -231,19 +229,18 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
       <InsightCard
         title={`模糊去重（${fuzzy?.totalSamples ?? 0} 条 → ${fuzzy?.uniqueCanonical ?? 0} 个规范键）`}
         enabled={(fuzzy?.totalSamples ?? 0) > 0}
-        hint="当前后端 /analyze 接口不返回模糊去重结果（该能力仅在 CLI 路径产出）。"
-        empty="未发现重复或近似重复"
+        hint={tx("当前后端 /analyze 接口不返回模糊去重结果（该能力仅在 CLI 路径产出）。")}
+        empty={tx("未发现重复或近似重复")}
       >
         {(fuzzy?.groups?.length ?? 0) > 0 ? (
           <>
             <div className="mb-3 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-              {fuzzy.groupCount} 组重复，共 {fuzzy.similarDuplicates} 条冗余
-            </div>
+              {fuzzy.groupCount} {tx("组重复，共")} {fuzzy.similarDuplicates} {tx("条冗余")} </div>
             <div className="space-y-2">
               {fuzzy.groups.slice(0, 10).map((g, i) => (
                 <div key={i} className="flex flex-wrap items-start gap-2 rounded-lg border border-border/60 px-3 py-2">
                   <Chip>×{g.count}</Chip>
-                  {g.variants > 1 ? <Chip>{g.variants} 个变体</Chip> : null}
+                  {g.variants > 1 ? <Chip>{g.variants} {tx("个变体")} </Chip> : null}
                   <span className="min-w-0 flex-1 break-all font-mono text-[11px] text-muted-foreground">{g.representativeJson}</span>
                 </div>
               ))}
@@ -257,39 +254,39 @@ export default function InsightsPanel({ result, insights, features = {}, fileNam
       </div>
 
       <div className="lg:col-span-2">
-        <InsightCard title="Schema 演进（快照 Diff）">
+        <InsightCard title={tx("Schema 演进（快照 Diff）")}>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] hover:bg-muted/80" onClick={downloadSnapshot}>下载当前快照</button>
-            <button type="button" className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] hover:bg-muted/80" onClick={() => snapshotInput.current?.click()}>上传基线对比</button>
+            <button type="button" className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] hover:bg-muted/80" onClick={downloadSnapshot}> {tx("下载当前快照")} </button>
+            <button type="button" className="inline-flex h-9 items-center rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)] hover:bg-muted/80" onClick={() => snapshotInput.current?.click()}> {tx("上传基线对比")} </button>
             <input ref={snapshotInput} type="file" accept=".json" className="hidden" onChange={onBaselineUpload} />
           </div>
           {diffError ? <div className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">{diffError}</div> : null}
           {diff ? (
             <div className="mt-4 space-y-3">
               <div className={`rounded-lg px-3 py-2 text-sm ${diff.hasBreakingChanges ? 'bg-danger/10 text-danger' : 'bg-ok/10 text-ok'}`}>
-                {diff.hasBreakingChanges ? '⚠ 存在破坏性变更' : '✓ 无破坏性变更'}
-                <span className="ml-2 text-xs opacity-80">新增 {diff.addedFields.length} · 删除 {diff.removedFields.length} · 变更 {diff.changedFields.length}</span>
+                {diff.hasBreakingChanges ? tx("⚠ 存在破坏性变更") : tx("✓ 无破坏性变更")}
+                <span className="ml-2 text-xs opacity-80"> {tx("新增")} {diff.addedFields.length} {tx("· 删除")} {diff.removedFields.length} {tx("· 变更")} {diff.changedFields.length}</span>
               </div>
               {diff.removedFields.length > 0 ? (
                 <div>
-                  <div className="mb-1 text-xs font-medium text-danger">删除的字段</div>
+                  <div className="mb-1 text-xs font-medium text-danger"> {tx("删除的字段")} </div>
                   {diff.removedFields.map((f) => <div key={f.path} className="font-mono text-xs text-muted-foreground">− {f.path}</div>)}
                 </div>
               ) : null}
               {diff.addedFields.length > 0 ? (
                 <div>
-                  <div className="mb-1 text-xs font-medium text-ok">新增的字段</div>
+                  <div className="mb-1 text-xs font-medium text-ok"> {tx("新增的字段")} </div>
                   {diff.addedFields.map((f) => <div key={f.path} className="font-mono text-xs text-muted-foreground">+ {f.path}</div>)}
                 </div>
               ) : null}
               {diff.changedFields.length > 0 ? (
                 <div>
-                  <div className="mb-1 text-xs font-medium text-warn">变更的字段</div>
+                  <div className="mb-1 text-xs font-medium text-warn"> {tx("变更的字段")} </div>
                   {diff.changedFields.map((f) => (
                     <div key={f.path} className="mb-2">
                       <div className="font-mono text-xs">
                         ~ {f.path}{' '}
-                        {f.breaking ? <span className="rounded bg-danger/15 px-1.5 py-0.5 text-[10px] text-danger">破坏性</span> : null}
+                        {f.breaking ? <span className="rounded bg-danger/15 px-1.5 py-0.5 text-[10px] text-danger"> {tx("破坏性")} </span> : null}
                       </div>
                       {(f.changes || []).map((c, i) => (
                         <div key={i} className="pl-3 text-[11px] text-muted-foreground">{c.description}</div>

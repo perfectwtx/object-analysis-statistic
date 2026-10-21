@@ -1,3 +1,4 @@
+import { translate as tx, useT } from '../lib/i18n.js';
 import { useEffect, useMemo, useState } from 'react';
 import { parseJsonc } from '../utils.js';
 import { cn } from '../lib/cn.js';
@@ -58,6 +59,7 @@ function writeValueParsersIntoText(text, list) {
 }
 
 export default function VisualValueParsers({ text, setText, busy }) {
+  useT();
   const fromText = useMemo(() => parseValueParsers(text), [text]);
   // Local overlay so "添加列" is visible immediately even before source is filled
   const [rows, setRows] = useState(fromText);
@@ -98,25 +100,19 @@ export default function VisualValueParsers({ text, setText, busy }) {
     <section className="rounded-xl border border-border bg-muted/20 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium">值解析器 valueParsers</h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            仅对 Excel / CSV 生效：把指定列的单元格按 JSON 解析后再统计。先点「添加列」，再填写 source 列名。
-          </p>
+          <h3 className="text-sm font-medium"> {tx("值解析器 valueParsers")} </h3>
+          <p className="mt-1 text-[11px] text-muted-foreground"> {tx("仅对 Excel / CSV 生效：把指定列的单元格按 JSON 解析后再统计。先点「添加列」，再填写 source 列名。")} </p>
         </div>
         <button
           type="button"
           disabled={busy}
           onClick={addRow}
           className="h-8 shrink-0 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-40"
-        >
-          添加列
-        </button>
+        > {tx("添加列")} </button>
       </div>
 
       {rows.length === 0 ? (
-        <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-          未配置。点击右上角「添加列」开始。适合「某一列整格是 JSON 字符串」的表格场景。
-        </div>
+        <div className="mt-3 rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground"> {tx("未配置。点击右上角「添加列」开始。适合「某一列整格是 JSON 字符串」的表格场景。")} </div>
       ) : (
         <ul className="mt-3 space-y-3">
           {rows.map((row, index) => (
@@ -125,10 +121,9 @@ export default function VisualValueParsers({ text, setText, busy }) {
               className="rounded-xl border border-border bg-background p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-medium text-muted-foreground">
-                  列 #{index + 1}
+                <span className="text-xs font-medium text-muted-foreground"> {tx("列 #")} {index + 1}
                   {!String(row.source || '').trim() ? (
-                    <span className="ml-2 text-warn">请填写 source</span>
+                    <span className="ml-2 text-warn"> {tx("请填写 source")} </span>
                   ) : null}
                 </span>
                 <button
@@ -136,19 +131,15 @@ export default function VisualValueParsers({ text, setText, busy }) {
                   disabled={busy}
                   className="text-xs text-danger hover:underline disabled:opacity-40"
                   onClick={() => removeRow(index)}
-                >
-                  删除
-                </button>
+                > {tx("删除")} </button>
               </div>
 
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <label className="block sm:col-span-2">
-                  <span className="mb-1 block text-[11px] text-muted-foreground">
-                    source（列定位）
-                  </span>
+                  <span className="mb-1 block text-[11px] text-muted-foreground"> {tx("source（列定位）")} </span>
                   <input
                     className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2.5 font-mono text-sm outline-none focus:border-primary/40"
-                    placeholder="header≥1 用表头标题，如 payload；header=0 用列字母如 B"
+                    placeholder={tx("header≥1 用表头标题，如 payload；header=0 用列字母如 B")}
                     disabled={busy}
                     value={row.source}
                     onChange={(e) => updateRow(index, { source: e.target.value })}
@@ -163,7 +154,7 @@ export default function VisualValueParsers({ text, setText, busy }) {
                         key={pt.value}
                         type="button"
                         disabled={busy}
-                        title={pt.hint}
+                        title={tx(pt.hint)}
                         onClick={() => updateRow(index, { parseType: pt.value })}
                         className={cn(
                           'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
@@ -172,24 +163,22 @@ export default function VisualValueParsers({ text, setText, busy }) {
                             : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
-                        {pt.label}
+                        {tx(pt.label)}
                       </button>
                     ))}
                   </div>
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    {PARSE_TYPES.find((p) => p.value === (row.parseType || 'auto'))?.hint}
+                    {tx(PARSE_TYPES.find((p) => p.value === (row.parseType || 'auto'))?.hint)}
                   </p>
                 </div>
 
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-muted-foreground">
-                    header（表头行号）
-                  </span>
+                  <span className="mb-1 block text-[11px] text-muted-foreground"> {tx("header（表头行号）")} </span>
                   <input
                     type="number"
                     min={0}
                     className="h-9 w-full rounded-lg border border-border bg-muted/30 px-2 text-sm outline-none focus:border-primary/40"
-                    placeholder="1=首行表头，0=无表头"
+                    placeholder={tx("1=首行表头，0=无表头")}
                     disabled={busy}
                     value={row.header ?? ''}
                     onChange={(e) =>
@@ -198,18 +187,16 @@ export default function VisualValueParsers({ text, setText, busy }) {
                       })
                     }
                   />
-                  <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                    0 无表头 · 1 默认首行 · ≥2 第 N 行为表头
-                  </span>
+                  <span className="mt-0.5 block text-[10px] text-muted-foreground"> {tx("0 无表头 · 1 默认首行 · ≥2 第 N 行为表头")} </span>
                 </label>
 
                 <div>
-                  <div className="mb-1.5 text-[11px] text-muted-foreground">flatten（本列）</div>
+                  <div className="mb-1.5 text-[11px] text-muted-foreground"> {tx("flatten（本列）")} </div>
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      { value: undefined, label: '跟随全局' },
-                      { value: true, label: '展开' },
-                      { value: false, label: '不展开' },
+                      { value: undefined, label: tx("跟随全局") },
+                      { value: true, label: tx("展开") },
+                      { value: false, label: tx("不展开") },
                     ].map((opt) => (
                       <button
                         key={String(opt.value)}
@@ -223,7 +210,7 @@ export default function VisualValueParsers({ text, setText, busy }) {
                             : 'bg-muted text-muted-foreground hover:text-foreground',
                         )}
                       >
-                        {opt.label}
+                        {tx(opt.label)}
                       </button>
                     ))}
                   </div>

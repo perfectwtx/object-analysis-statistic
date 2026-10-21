@@ -1,23 +1,15 @@
-import { useEffect } from 'react';
+import { useId } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus.js';
+import { useT } from '../../lib/i18n.js';
 import { cn } from '../../lib/cn.js';
 
 /**
  * Simple centered modal. Escape / backdrop click closes when onClose provided.
  */
 export function Modal({ open, onClose, title, description, children, footer, className, size = 'lg' }) {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
-    };
-    document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
-    };
-  }, [open, onClose]);
+  const { t } = useT();
+  const titleId = useId(), descriptionId = useId();
+  const dialogRef = useDialogFocus({ open, onClose });
 
   if (!open) return null;
 
@@ -29,13 +21,18 @@ export function Modal({ open, onClose, title, description, children, footer, cla
       <button
         type="button"
         className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
-        aria-label="Close"
+        aria-label={t('关闭')}
+        tabIndex={-1}
         onClick={onClose}
       />
       <div
         role="dialog"
+        ref={dialogRef}
+        tabIndex={-1}
         aria-modal="true"
-        aria-labelledby={title ? 'oa-modal-title' : undefined}
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descriptionId : undefined}
+        aria-label={!title ? t('配置') : undefined}
         className={cn(
           'relative z-10 flex max-h-[min(90vh,720px)] w-full flex-col overflow-hidden rounded-2xl bg-card shadow-[var(--elev)]',
           width,
@@ -45,12 +42,12 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         {(title || description) && (
           <div className="shrink-0 border-b border-border px-5 py-4">
             {title ? (
-              <h2 id="oa-modal-title" className="text-base font-medium tracking-tight">
+              <h2 id={titleId} className="text-base font-medium tracking-tight">
                 {title}
               </h2>
             ) : null}
             {description ? (
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+              <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">{description}</p>
             ) : null}
           </div>
         )}

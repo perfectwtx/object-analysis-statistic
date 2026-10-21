@@ -84,6 +84,7 @@ function componentHarness(Component) {
     },
     useRef(initial) { const i = cursor++; return values[i] ||= { current: initial }; },
     useCallback(fn) { return fn; }, useMemo(fn) { return fn(); }, useEffect() {},
+    useSyncExternalStore(subscribe, getSnapshot) { return getSnapshot(); }, useDebugValue() {},
   };
   return () => {
     cursor = 0;
