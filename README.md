@@ -2,6 +2,8 @@
 
 基于 React 的对象／字段分析与数据质量平台。前端负责文件提交、规则编辑、任务进度、结果展示和报告导出，统计由配套的 .NET `ObjectAnalyzer.Api` 完成；规则 JSONC 清洗、界面筛选、结果适配与报告生成在浏览器执行。
 
+技术栈：React 18、Vite 5、React Router 6、Zustand、Tailwind CSS 和 Recharts。
+
 ## 安装与运行
 
 使用 Node.js 22（与 CI 一致；本次本地验证使用 Node.js 24）。
@@ -12,6 +14,17 @@ npm run dev
 ```
 
 默认打开 [本地开发页面](http://localhost:5173)。端口占用时 Vite 会选择下一个可用端口，以终端输出为准。
+
+### 首次完成一次分析
+
+1. 按配套后端仓库的说明启动 `ObjectAnalyzer.Api`，默认代理目标为 `http://localhost:5200`。此仓库不包含 .NET 工程。
+2. 根据下方说明配置 API 地址并启动前端，确认后端状态。
+3. 进入“分析”，加载样例或上传文件；在“配置”中编辑并应用规则。
+4. 查看字段明细、取值分布、质量报告，按需导出结果。后台分析完成后的历史、趋势和洞察能力取决于后端部署。
+
+只查看平台演示时，可将 `.env.local` 中的 `VITE_DEMO_MODE` 设为 `true`；上传、样例分析与规则权威校验仍需要后端。
+
+### 常用命令
 
 ```bash
 npm run check          # 全部源码语法、相对引用、锁文件元数据检查
@@ -27,11 +40,11 @@ Windows 的 npm 启动脚本若指向不存在的 npm-cli.js，先检查 `Get-Co
 
 ## 环境配置
 
-复制 `.env.example` 为 `.env.local`，修改后重启开发服务；生产的 `VITE_*` 值在构建时固化。
+复制 `.env.example` 为 `.env.local` 配置 `VITE_*` 变量，修改后重启开发服务；生产的 `VITE_*` 值在构建时固化。`API_TARGET` 由当前 Vite 配置读取 shell 环境变量，不能仅写入 `.env.local` 后就假定代理目标已改变。
 
 | 配置 | 默认值 | 用途 |
 | --- | --- | --- |
-| `API_TARGET` | `http://localhost:5200` | Vite 开发代理目标 |
+| `API_TARGET` | `http://localhost:5200` | shell 环境变量，仅用于 Vite 开发代理 |
 | `VITE_API_BASE` | `/api` | 浏览器 API 前缀，完整 URL 应包含 `/api` |
 | `VITE_DEMO_MODE` | `false` | 只有显式设为 `true` 才展示平台样例 |
 
@@ -92,4 +105,12 @@ tests/                     Node test runner 业务回归
 - [API 对接契约与待联调项](docs/frontend-api-gaps.md)
 - [优化清单与实施记录](docs/project-optimization-plan.md)
 
-本次已验证前端回归、构建、首屏体积，以及英文工作台、弹窗焦点和 390px 布局。真实后端写入、服务端能力和生产反向代理仍需目标环境联调；CI 文件已加入仓库，远端执行结果需推送后查看。
+## 验证与维护
+
+截至 2026-10-21，本地通过 38 项业务回归测试、102 个源码模块的语法与相对引用检查、生产构建，以及首屏 350 KiB 预算检查。首屏静态 JavaScript 约 288 KiB；这是构建文件体积，不是实际用户加载耗时。
+
+浏览器已检查英文工作台、弹窗 Tab／Escape、嵌套焦点与滚动锁、关闭后的焦点恢复、侧栏键盘调宽，以及 390px 窄屏无横向溢出。对应 P1、P2、P3 优化及各项提交见实施记录。
+
+GitHub Actions 在 push 和 pull request 时执行安装、源码检查、测试、构建和体积检查，可在[项目 CI 页面](https://github.com/perfectwtx/object-analysis-statistic/actions/workflows/ci.yml)查看远端运行结果。依赖变更需同步 package.json 与 package-lock.json；增加页面或公共依赖后应检查首屏预算是否仍满足要求。
+
+真实后端写入、服务端能力、目标环境鉴权和生产反向代理仍需联调；本地测试通过不代表这些外部系统已经完成验收。
