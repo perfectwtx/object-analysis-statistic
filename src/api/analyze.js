@@ -102,13 +102,8 @@ export function fetchRulesReference(opts) {
 export async function preflight(file, options = {}) {
   const form = new FormData();
   form.append('file', file);
-  if (options.rulesJson) form.append('rulesJson', options.rulesJson);
-  else if (options.rules) form.append('rules', options.rules);
-  if (options.flatten !== undefined) form.append('flatten', String(options.flatten));
-  if (options.csvInferNumbers !== undefined) form.append('csvInferNumbers', String(options.csvInferNumbers));
-  if (options.recordPath) form.append('recordPath', options.recordPath);
-  if (options.allowUnknownRules !== undefined) form.append('allowUnknownRules', String(options.allowUnknownRules));
-  const r = await request('/preflight', { method: 'POST', body: form, timeout: 30_000 });
+  appendAnalyzeOptions(form, options);
+  const r = await request('/preflight', { method: 'POST', body: form, timeout: 30_000, ...options.request });
   return r?.preflight ?? r;
 }
 

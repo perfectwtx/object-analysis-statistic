@@ -1,21 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReportExport } from '../hooks/useReportExport.js';
 import {
-  fetchRulesReference,
-  preflight,
-  validateRules,
   ASYNC_THRESHOLD_BYTES,
   saveLastJobId,
 } from '../api/index.js';
 import { useAsyncAnalyze } from '../hooks/useAsyncAnalyze.js';
-import { computeRuleFieldWarning, formatRulesError, parseJsonc, toBackendRulesText } from '../utils.js';
+import { computeRuleFieldWarning, parseJsonc } from '../utils.js';
 import { SAMPLE_DATA, FULL_SAMPLE_DATA, FULL_RULES_TEXT } from '../sampleData.js';
-import { RULES_TEMPLATE, EMPTY_RULES } from '../components/RulesEditor.jsx';
+import { useWorkbenchRules } from '../hooks/useWorkbenchRules.js';
+import { useAnalysisPreflight } from '../hooks/useAnalysisPreflight.js';
+import { buildAnalysisOptions } from '../lib/build-analysis-options.js';
 import WorkbenchLayout from './WorkbenchLayout.jsx';
 import {
   loadAnalyzeOptions,
   saveAnalyzeOptions,
-  toAnalyzeRequestOptions,
 } from '../lib/analyzeOptions.js';
 import { mergeFieldNamesIntoRulesText } from '../lib/fieldRules.js';
 
@@ -58,17 +56,13 @@ export default function Workbench() {
   const [source, setSource] = useState(null);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
-  const [rulesText, setRulesText] = useState(RULES_TEMPLATE);
-  const [rules, setRules] = useState(null);
-  const [rulesError, setRulesError] = useState('');
-  const [rulesCheck, setRulesCheck] = useState(null);
+  const ruleState = useWorkbenchRules();
+  const { rulesText, setRulesText, rules, setRules, rulesError, setRulesError, rulesCheck, setRulesCheck, checkRules, fetchReference } = ruleState;
   const [tab, setTab] = useState('fields');
   const [textFormat, setTextFormat] = useState('json');
   const fileInput = useRef(null);
   const [result, setResult] = useState(null);
   const [elapsed, setElapsed] = useState(null);
-  const [preflightModal, setPreflightModal] = useState(null);
-  const [pendingRun, setPendingRun] = useState(null);
   const [features, setFeatures] = useState(loadFeatures);
   const [csvInfer, setCsvInfer] = useState(loadCsvInfer);
   const [forceAsync, setForceAsync] = useState(false);
@@ -169,78 +163,34 @@ export default function Workbench() {
     await startAnalyze(src.file, opts, { forceAsync: preferAsync, forceSync: !preferAsync && !forceAsync });
   }, [startAnalyze, forceAsync]);
 
-  const runAnalysis = useCallback(async (src, _rulesJsonText, rulesOverride) => {
+  const { prepare, preparing, preflightModal, confirmPreflight, cancelPreflight } = useAnalysisPreflight({
+    execute: executeAnalysis,
+    onSampleFields: (names) => { setLastSampleFields(names); setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, names)); },
+    onError: (e) => setError(e.message),
+  });
+  const runAnalysis = async ({ source: src = source, rules: activeRules = rules } = {}) => {
     if (!src?.file) return;
-    const activeRules = rulesOverride !== undefined ? rulesOverride : rules;
-    const { flatten, selectedFields, filter, ...ruleBody } = activeRules || {};
-    const rulesJson = activeRules ? JSON.stringify(ruleBody) : null;
-    const apiOpts = toAnalyzeRequestOptions(analyzeOptions);
-    const opts = {
-      rulesJson,
-      flatten,
-      fields: selectedFields?.length ? selectedFields.join(',') : apiOpts.fields,
-      filter: filter || apiOpts.filter,
-      features,
-      csvInferNumbers: csvInfer,
-      ...apiOpts,
-      ...(selectedFields?.length ? { fields: selectedFields.join(',') } : {}),
-      ...(filter ? { filter } : {}),
-    };
-    if (rulesJson) {
-      try {
-        const pf = await preflight(src.file, { rulesJson, flatten, csvInferNumbers: csvInfer, ...toAnalyzeRequestOptions(analyzeOptions) });
-        const sample = pf?.sampleFields ?? pf?.SampleFields ?? [];
-        if (Array.isArray(sample) && sample.length) {
-          setLastSampleFields(sample);
-          setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, sample));
-        }
-        if (pf?.hasWarning) {
-          setPreflightModal({ ruleFields: pf.ruleFields ?? [], sampleFields: sample, truncated: pf.truncatedSampleFieldCount ?? 0 });
-          setPendingRun({ src, opts });
-          return;
-        }
-      } catch { /* ignore */ }
-    }
-    await executeAnalysis(src, opts);
-  }, [rules, features, csvInfer, executeAnalysis, analyzeOptions]);
-
-  const confirmPreflight = () => {
-    const pending = pendingRun;
-    setPreflightModal(null); setPendingRun(null);
-    if (pending) executeAnalysis(pending.src, pending.opts);
+    setError('');
+    try { await prepare(src, buildAnalysisOptions({ rules: activeRules, features, csvInfer, runtime: analyzeOptions })); }
+    catch (e) { setError(e.message); }
   };
-  const cancelPreflight = () => { setPreflightModal(null); setPendingRun(null); };
+  const cancelAll = () => { cancelPreflight(); return cancelAnalysis(); };
   const onImportSampleFields = () => {
     if (!lastSampleFields?.length) return;
     setRulesText((prev) => mergeFieldNamesIntoRulesText(prev, lastSampleFields));
   };
 
-  const checkRules = useCallback(async (text) => {
-    if (!text?.trim()) { setRulesCheck(null); return { ok: true, empty: true }; }
-    let parsed;
-    try { parsed = parseJsonc(text); }
-    catch (e) { setRulesCheck({ state: 'error', message: e.message, source: 'local' }); return { ok: false, message: e.message }; }
-    setRulesCheck({ state: 'checking' });
-    const r = await validateRules(toBackendRulesText(text));
-    if (r.ok) { setRulesCheck({ state: 'ok', fields: r.fields }); return { ok: true, parsed, fields: r.fields, unknowns: r.unknowns }; }
-    if (r.offline) { setRulesCheck({ state: 'offline' }); return { ok: true, parsed, degraded: true }; }
-    const unknowns = r.unknowns || [];
-    const message = unknowns.length ? r.error || `有 ${unknowns.length} 个规则名不被后端识别` : formatRulesError(r.error);
-    setRulesCheck({ state: 'error', message, fields: r.fields, unknowns: unknowns.length ? unknowns : undefined, source: 'backend' });
-    return { ok: false, message };
-  }, []);
-
   const applyRules = async () => {
     const check = await checkRules(rulesText);
+    if (!check) return;
     if (!check.ok) { setRulesError('规则未通过校验，已取消分析'); return; }
-    if (check.empty) { setRules(null); setRulesError(''); return; }
+    if (check.empty) { ruleState.clear(); if (source) await runAnalysis({ source, rules: null }); return; }
     setRules(check.parsed); setRulesError('');
-    if (source) await runAnalysis(source, rulesText, check.parsed);
+    if (source) await runAnalysis({ source, rules: check.parsed });
   };
   const clearRules = () => {
-    setRules(null); setRulesError(''); setRulesCheck(null);
-    setRulesText(EMPTY_RULES);
-    if (source) runAnalysis(source, null, null);
+    ruleState.clear();
+    if (source) return runAnalysis({ source, rules: null });
   };
 
   const onFile = async (e) => {
@@ -248,7 +198,7 @@ export default function Workbench() {
     if (!file) return;
     const src = { file, name: file.name };
     setSource(src); setFileName(file.name); setError('');
-    await runAnalysis(src, rulesText);
+    await runAnalysis({ source: src });
   };
   const openPaste = () => setPasteOpen(true);
   const submitPaste = async (text, format) => {
@@ -258,13 +208,13 @@ export default function Workbench() {
     setFileName(name); setError('');
     const file = new File([text], `pasted.${fmt}`, { type: 'text/plain' });
     const src = { file, name }; setSource(src);
-    await runAnalysis(src, rulesText);
+    await runAnalysis({ source: src });
   };
   const loadSample = async () => {
     setFileName('内置样例数据'); setError('');
     const file = new File([JSON.stringify(SAMPLE_DATA)], 'sample.json', { type: 'application/json' });
     const src = { file, name: '内置样例数据' }; setSource(src);
-    await runAnalysis(src, rulesText);
+    await runAnalysis({ source: src });
   };
 
   /** 一键加载全量样例数据 + 全量规则，并立即分析 */
@@ -285,16 +235,7 @@ export default function Workbench() {
     const file = new File([JSON.stringify(FULL_SAMPLE_DATA, null, 2)], 'full-sample.json', { type: 'application/json' });
     const src = { file, name: '全量样例数据' };
     setSource(src);
-    await runAnalysis(src, FULL_RULES_TEXT, parsed);
-  };
-
-  const fetchReference = async () => {
-    try {
-      const ref = await fetchRulesReference();
-      const text = typeof ref === 'string' ? ref : JSON.stringify(ref, null, 2);
-      setRulesText(text); setRulesError('');
-      await checkRules(text);
-    } catch (e) { setRulesError(`拉取参考模板失败：${e.message}`); }
+    await runAnalysis({ source: src, rules: parsed });
   };
 
   const { exporting, exportReport } = useReportExport({
@@ -304,7 +245,7 @@ export default function Workbench() {
 
   return (
     <WorkbenchLayout
-      busy={busy}
+      busy={busy || preparing}
       sidebarW={sidebarW}
       onResizeStart={onResizeStart}
       fileName={fileName}
@@ -317,8 +258,8 @@ export default function Workbench() {
       source={source}
       runAnalysis={runAnalysis}
       rulesText={rulesText}
-      cancelAnalysis={cancelAnalysis}
-      phase={phase}
+      cancelAnalysis={cancelAll}
+      phase={preparing ? 'submitting' : phase}
       progress={progress}
       jobId={jobId}
       asyncError={asyncError}

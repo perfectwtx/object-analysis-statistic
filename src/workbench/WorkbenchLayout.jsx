@@ -45,7 +45,7 @@ export default function WorkbenchLayout({
               <button type="button" className="inline-flex h-10 items-center justify-center rounded-lg bg-muted text-sm font-medium text-foreground shadow-[var(--elev)] hover:bg-muted/80 disabled:opacity-40" onClick={onPaste} disabled={busy}>粘贴数据</button>
               <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={loadSample} disabled={busy}>加载样例数据</button>
               <button type="button" className="h-9 rounded-lg border border-primary/30 bg-primary/10 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-40" onClick={loadFullSample} disabled={busy} title="加载覆盖全部规则类型的数据与规则配置，并立即分析">加载全量样例</button>
-              <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={() => source && runAnalysis(source, rulesText)} disabled={busy || !source}>重新分析</button>
+              <button type="button" className="h-9 rounded-lg text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40" onClick={() => source && runAnalysis({ source })} disabled={busy || !source}>重新分析</button>
             </div>
           </section>
           <RulesRuntimeSection
@@ -79,7 +79,7 @@ export default function WorkbenchLayout({
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {(busy || phase === 'error' || phase === 'cancelled') ? (
           <div className="border-b border-border bg-card px-4 py-3">
-            <JobProgress phase={phase} progress={progress} jobId={jobId} error={asyncError} onCancel={cancelAnalysis} onRetry={() => source && runAnalysis(source, rulesText)} forceAsync={forceAsync} onForceAsyncChange={setForceAsync} showAsyncToggle fileSize={source?.file?.size ?? 0} />
+            <JobProgress phase={phase} progress={progress} jobId={jobId} error={asyncError} onCancel={cancelAnalysis} onRetry={() => source && runAnalysis({ source })} forceAsync={forceAsync} onForceAsyncChange={setForceAsync} showAsyncToggle fileSize={source?.file?.size ?? 0} />
           </div>
         ) : null}
         {result ? (

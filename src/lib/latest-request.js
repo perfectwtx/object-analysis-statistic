@@ -12,7 +12,7 @@ export function createLatestRequest() {
       onStart?.();
       try {
         const data = await execute(signal);
-        if (own === generation) onSuccess?.(data);
+        if (own === generation) return onSuccess ? await onSuccess(data) : data;
       } catch (e) {
         if (own === generation && !signal.aborted) onError?.(e);
       } finally {

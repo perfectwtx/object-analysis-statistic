@@ -110,6 +110,16 @@ test('真实工作台应用规则后清空，下一次请求不携带旧规则',
   assert.equal(forms.at(-1).get('rulesJson'), null);
 });
 
+test('预检与分析表单共享过滤、路径、规则和运行选项', async () => {
+  const forms = [];
+  globalThis.fetch = async (url, opts) => { forms.push(opts.body); return reply({}); };
+  const file = new File(['[]'], 'data.json');
+  const options = { rulesJson: '{"fields":{}}', fields: 'age', filter: 'age>0', rootPath: 'data', recordPath: 'rows', sampleStep: 2, maxParallel: 3, flatten: false, csvInferNumbers: false, features: { enableCorrelation: true } };
+  await api.preflight(file, options); await api.analyzeFile(file, options);
+  const entries = (form) => [...form].filter(([key]) => key !== 'file');
+  assert.deepEqual(entries(forms[0]), entries(forms[1]));
+});
+
 function sessionHarness(overrides = {}) {
   let state = {}; let events, poll; const cancelled = []; let closed = 0, stopped = 0;
   const deps = {

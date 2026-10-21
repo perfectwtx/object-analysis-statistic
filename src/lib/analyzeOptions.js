@@ -119,7 +119,8 @@ export function toAnalyzeRequestOptions(opts = {}) {
     if (v !== undefined && v !== null && String(v).trim() !== '') {
       if (['maxValues', 'sampleReservoir', 'sampleStep', 'maxParallel'].includes(key)) {
         const n = Number(v);
-        if (!Number.isNaN(n)) out[key] = n;
+        if (!Number.isSafeInteger(n) || n < 1) throw new Error(`${key}: 请输入正整数`);
+        out[key] = n;
       } else {
         out[key] = String(v).trim();
       }
