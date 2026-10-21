@@ -29,7 +29,8 @@ export default function QualityDashboard() {
   const [deleteMsg, setDeleteMsg] = useState('');
   const [pendingJob, setPendingJob] = useState(null);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const ensureLoaded = usePlatform((s) => s.ensureLoaded);
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
 
   async function performDelete(job) {
     const id = job?.id;

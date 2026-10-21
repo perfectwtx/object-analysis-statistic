@@ -86,12 +86,17 @@ export const usePlatform = create((set, get) => ({
     }));
   },
 
-  refresh: async () => {
+  ensureLoaded: () => {
+    if (get().lastLoadedAt && Date.now() - get().lastLoadedAt < 30000) return;
+    return get().refresh();
+  },
+  refresh: async ({ module } = {}) => {
     if (get().loading || Object.keys(get().alertSaving).length) return;
     set({ loading: true, error: null });
     try {
-      const data = await loadPlatformOverview();
+      const data = await loadPlatformOverview({ previous: get().overview, only: module ? [module] : undefined });
       set({
+        overview: data,
         jobs: data.jobs,
         issues: data.issues,
         dims: data.dims,

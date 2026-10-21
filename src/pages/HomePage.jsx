@@ -26,9 +26,8 @@ export default function HomePage() {
   const refresh = usePlatform((s) => s.refresh);
   const locale = usePlatform((s) => s.locale);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  const ensureLoaded = usePlatform((s) => s.ensureLoaded);
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
 
   const displayScore = score;
   const topIssues = (issues || []).slice(0, 4);

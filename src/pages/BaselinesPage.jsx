@@ -14,7 +14,8 @@ export default function BaselinesPage() {
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
   const refresh = usePlatform((s) => s.refresh);
-  useEffect(() => { refresh(); }, [refresh]);
+  const ensureLoaded = usePlatform((s) => s.ensureLoaded);
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
   return (
     <div>
       <PageHeader

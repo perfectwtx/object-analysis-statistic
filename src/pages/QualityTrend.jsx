@@ -15,7 +15,8 @@ export default function QualityTrend() {
   const source = usePlatform((s) => s.source);
   const loading = usePlatform((s) => s.loading);
   const refresh = usePlatform((s) => s.refresh);
-  useEffect(() => { refresh(); }, [refresh]);
+  const ensureLoaded = usePlatform((s) => s.ensureLoaded);
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
   const last = trend[trend.length - 1];
   const first = trend[0];
   const delta =

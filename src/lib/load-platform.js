@@ -3,19 +3,28 @@ import { asList, normalizeJob, normalizeIssue, normalizeSnapshot, normalizeTrend
 import { extractDashboard, extractIssuesFromResponse } from './normalize-extract.js';
 import { DEMO_MODE, initialPlatformData } from './data-mode.js';
 
-export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi } = {}) {
+export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi, previous, only } = {}) {
   if (demo) return { ...initialPlatformData(true), backendOk: false, error: null };
   const names = ['jobs', 'issues', 'snapshots', 'trend', 'dashboard', 'baselines', 'alerts'];
+  const selected = new Set(only || names);
+  if (selected.has('snapshots') || selected.has('trend')) { selected.add('snapshots'); selected.add('trend'); }
+  let trendRequest;
+  const trend = () => trendRequest ||= api.getQualityTrend({ limit: 30 });
+  const loaders = {
+    jobs: () => api.listJobs({ limit: 20 }), issues: () => api.listIssues({ limit: 50 }),
+    snapshots: trend, trend, dashboard: () => api.getQualityDashboard(),
+    baselines: () => api.listBaselines(), alerts: () => api.listAlertRules(),
+  };
   const [health, ...results] = await Promise.allSettled([
-    api.checkHealth(), api.listJobs({ limit: 20 }), api.listIssues({ limit: 50 }),
-    api.listQualitySnapshots({ limit: 20 }), api.getQualityTrend({ days: 30 }),
-    api.getQualityDashboard(), api.listBaselines(), api.listAlertRules(),
+    only ? Promise.resolve(previous?._health || { ok: false }) : api.checkHealth(),
+    ...names.map((name) => selected.has(name) ? loaders[name]() : Promise.resolve(previous?._responses?.[name] || { unavailable: true, data: null })),
   ]);
   const modules = {};
   const responses = results.map((r, i) => {
+    if (!selected.has(names[i]) && previous?.modules?.[names[i]]) modules[names[i]] = previous.modules[names[i]];
     const failed = r.status === 'rejected';
     const response = failed ? { unavailable: true, data: null } : r.value;
-    modules[names[i]] = {
+    modules[names[i]] ||= {
       source: failed ? 'error' : response.unavailable ? 'unavailable' : 'api',
       error: failed ? r.reason?.message || String(r.reason) : response.unavailable ? '接口未启用' : null,
     };
@@ -28,7 +37,7 @@ export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi
   let issues = issuePack.issues.length ? issuePack.issues : asList(ir.data).map(normalizeIssue).filter(Boolean);
   if (jr.unavailable && issuePack.jobs.length) jobs = issuePack.jobs;
   let snapshots = asList(sr.data).map(normalizeSnapshot).filter(Boolean);
-  let trend = asList(tr.data).map(normalizeTrendPoint).filter((p) => p && p.day);
+  let trendPoints = asList(tr.data).map(normalizeTrendPoint).filter((p) => p && p.day);
   const dash = dr.unavailable ? null : extractDashboard(dr.data);
   if (sr.unavailable && dash?.snapshots?.length) snapshots = dash.snapshots;
   if (ir.unavailable && dash?.topIssues?.length) issues = dash.topIssues;
@@ -38,7 +47,7 @@ export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi
   // 总分只采用后端提供的值，缺失维度不参与推算。
   const score = dash?.score ?? snapshots[0]?.overallScore ?? jobs[0]?.score ?? null;
   if (tr.unavailable && snapshots.length) {
-    trend = snapshots.map((s) => ({ day: (s.createdAt || '').slice(0, 10), score: s.overallScore }))
+    trendPoints = snapshots.map((s) => ({ day: (s.createdAt || '').slice(0, 10), score: s.overallScore }))
       .filter((p) => p.day && p.score != null).reverse();
   }
   const labels = { jobs: '作业', issues: '问题', snapshots: '质量快照', trend: '趋势', dashboard: '质量总览', baselines: '基线', alerts: '告警' };
@@ -46,7 +55,9 @@ export async function loadPlatformOverview({ demo = DEMO_MODE, api = platformApi
   const backendOk = health.status === 'fulfilled' && !!health.value.ok;
   if (!backendOk) errors.unshift(health.status === 'rejected' ? health.reason?.message : health.value.error || '健康检查失败');
   return {
-    ...data, backendOk, jobs, issues, snapshots, trend, dims, score, modules,
+    ...data, backendOk, jobs, issues, snapshots, trend: trendPoints, dims, score, modules,
+    _responses: Object.fromEntries(names.map((name, i) => [name, responses[i]])),
+    _health: health.status === 'fulfilled' ? health.value : { ok: false, error: health.reason?.message },
     error: errors.filter(Boolean).join('；') || null,
     baselines: asList(br.data).map((b) => ({
       id: b.id || b.Id || b.sourceName, name: b.name || b.Name || b.sourceName || '基线',

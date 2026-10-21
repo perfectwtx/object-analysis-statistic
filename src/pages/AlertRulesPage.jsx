@@ -20,7 +20,8 @@ export default function AlertRulesPage() {
   const saving = usePlatform((s) => s.alertSaving);
   const [saveError, setSaveError] = useState('');
   const refresh = usePlatform((s) => s.refresh);
-  useEffect(() => { refresh(); }, [refresh]);
+  const ensureLoaded = usePlatform((s) => s.ensureLoaded);
+  useEffect(() => { ensureLoaded(); }, [ensureLoaded]);
   return (
     <div>
       <PageHeader

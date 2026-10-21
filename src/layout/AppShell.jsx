@@ -8,7 +8,10 @@ import ProductTour from '../components/tour/ProductTour.jsx';
 export default function AppShell() {
   const { pathname } = useLocation();
   const flush = pathname.startsWith('/analyze');
-  const refresh = usePlatform((s) => s.refresh);
+  const refresh = usePlatform((s) => s.ensureLoaded);
+  const retry = usePlatform((s) => s.refresh);
+  const modules = usePlatform((s) => s.modules);
+  const loading = usePlatform((s) => s.loading);
   const source = usePlatform((s) => s.source);
   const error = usePlatform((s) => s.error);
   const locale = usePlatform((s) => s.locale);
@@ -28,6 +31,12 @@ export default function AppShell() {
             {source === 'demo'
               ? locale === 'en' ? 'Demo mode: all platform metrics are sample data. Alert changes are local only.' : '演示模式：平台指标均为样例数据，告警切换仅在本地生效。'
               : error}
+            {source !== 'demo' && Object.entries(modules).filter(([, m]) => m.error).map(([name]) => (
+              <button key={name} type="button" disabled={loading} className="ml-3 underline disabled:opacity-50"
+                onClick={() => retry({ module: name })}>
+                {locale === 'en' ? 'Retry' : '重试'} · {name}
+              </button>
+            ))}
           </div>
         ) : null}
         <Outlet />
