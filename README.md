@@ -1,111 +1,95 @@
-# ObjectAnalysisStatistic（Web UI）
+# ObjectAnalysisStatistic Web UI
 
-对象/字段分析统计工具的 Web 界面。对 JSON、JSONL、CSV、Excel、XML、YAML 等数据源做**扁平化展开 + 字段级统计 + 质量校验 + 深度分析**，支持规则驱动的类型转换与校验规则。
+基于 React 的对象／字段分析与数据质量平台。前端负责文件提交、规则编辑、任务进度、结果展示和报告导出，统计由配套的 .NET `ObjectAnalyzer.Api` 完成；规则 JSONC 清洗、界面筛选、结果适配与报告生成在浏览器执行。
 
-功能对齐 .NET 参考项目 [`ObjectAnalyzer`](../Items/ObjectAnalysisStatistic)。**所有统计均由 .NET 后端 `ObjectAnalyzer.Api` 计算**，前端只负责提交数据源与渲染结果——浏览器内不做任何解析或分析。
+## 安装与运行
 
-## 快速开始
-
-平台默认只展示真实 API 数据。空列表、未实现接口和请求失败不会自动补入样例。需要演示时，在 `.env.local` 显式设置 `VITE_DEMO_MODE=true` 并重启开发服务（生产需重新构建）；演示模式有页面提示，告警切换仅影响本地。
-
-回归检查：`npm test`。覆盖平台数据来源、规则清空、任务隔离和取消、SSE/轮询回退、告警保存。
+使用 Node.js 22（与 CI 一致；本次本地验证使用 Node.js 24）。
 
 ```bash
-npm install
-npm run dev      # 开发服务器 http://localhost:5173（热更新）
-npm run build    # 产物输出到 dist/
-npm run preview  # 本地预览构建产物
+npm ci
+npm run dev
 ```
 
-> 本机沙箱环境下 `npm install` 需指定本地缓存：`npm install --cache ./.npm-cache`。
+默认打开 [本地开发页面](http://localhost:5173)。端口占用时 Vite 会选择下一个可用端口，以终端输出为准。
 
-## 架构：纯后端分析
-
-早期版本在浏览器内用 JS 复刻了一套分析引擎（`analysis.js` + `parsers.js`），带来两个问题：与 .NET 实现存在偏差，且**大数据集会把浏览器主线程卡死**——其中模糊去重是 O(n²) 全量两两比对，5000 条耗时 27 秒，2 万条可达分钟级。
-
-现在已移除这套本地引擎，分析链路只剩一次 HTTP 请求：
-
-```
-选择文件 / 粘贴文本 → FormData → POST /api/analyze → .NET 计算 → 适配层 → 渲染
+```bash
+npm run check          # 全部源码语法、相对引用、锁文件元数据检查
+npm test               # 业务回归检查
+npm run build          # dist/ 与构建 manifest
+npm run check:bundle   # 首屏静态 JS 依赖总量，预算 350 KiB
+npm run preview        # 本地查看构建产物
 ```
 
-实测端到端耗时（含上传，经 Vite 代理，P4 全开）：
+Windows 的 npm 启动脚本若指向不存在的 npm-cli.js，先检查 `Get-Command node,npm` 与 Node 安装。可临时使用 `node <Node安装目录>/node_modules/npm/bin/npm-cli.js ci`。单独验证已有依赖时也可用 `node --test --test-concurrency=1 tests/*.test.mjs` 和 `node node_modules/vite/bin/vite.js build`。
 
-| 数据量 | 文件大小 | 耗时 |
+仅在全局缓存无写权限时使用 `npm ci --cache ./.npm-cache`。无需在构建前手动删除 dist，也不要通过跨 shell 删除命令规避权限问题。
+
+## 环境配置
+
+复制 `.env.example` 为 `.env.local`，修改后重启开发服务；生产的 `VITE_*` 值在构建时固化。
+
+| 配置 | 默认值 | 用途 |
 | --- | --- | --- |
-| 1,000 条 | 228 KB | 0.05 s |
-| 5,000 条 | 1.1 MB | 0.23 s |
-| 20,000 条 | 4.7 MB | 0.68 s |
+| `API_TARGET` | `http://localhost:5200` | Vite 开发代理目标 |
+| `VITE_API_BASE` | `/api` | 浏览器 API 前缀，完整 URL 应包含 `/api` |
+| `VITE_DEMO_MODE` | `false` | 只有显式设为 `true` 才展示平台样例 |
 
-页面右上角会显示本次分析的端到端耗时与数据量。
+开发时 `/api/*` 经 Vite 代理；例如 PowerShell：
 
-### 后端对接
-
-1. 启动 .NET 后端：
-   ```bash
-   dotnet run --project src/ObjectAnalyzer.Api
-   ```
-2. 前端默认请求 `/api/*`，由 Vite 代理转发到 `http://localhost:5200`（`vite.config.js`），无需处理 CORS。
-   换端口：`API_TARGET=http://localhost:5000 npm run dev`。
-3. 直连后端（生产/跨机）：在侧栏「后端地址」填 `http://host:port/api`，或建 `.env.local` 设置 `VITE_API_BASE`。
-
-接口清单：
-
-- `GET /api/health` → `{ status, version }`
-- `POST /api/analyze` multipart：`file`、`rulesJson`（内联规则）、`flatten`、`fields`、`filter`、`rootPath`、`recordPath`、`sampleReservoir`、`sampleStep`、`maxParallel` 及 P4 开关
-- `POST /api/analyze/raw?format=json` 请求体即文本。规则走查询参数 `rulesJson=`（请求体被数据占用，受请求行长度限制，约 8KB），另有 `allowUnknownRules`；规则较长时改用 `/api/analyze` —— 前端「粘贴数据」就是把文本包装成 File 走 multipart 的
-- `POST /api/rules/validate` **raw body**（不是 multipart），返回 `{ valid, fields, unknowns, error? }`；结构/类型非法时 400 + `{ error }`
-- `GET /api/rules/reference` 返回 `rules_full_reference.jsonc` 原文（纯文本，非 JSON）
-
-## 目录结构
-
+```powershell
+$env:API_TARGET = 'http://localhost:5000'
+npm run dev
 ```
+
+旧版保存在 `localStorage.apiBaseOverride` 的地址优先于环境变量。切换环境时需检查此覆盖值。当前工作台没有后端地址编辑入口。
+
+## 功能与边界
+
+| 模块 | 当前前端能力 |
+| --- | --- |
+| 分析 | 上传文件、粘贴文本、样例、规则校验、预检、同步与异步任务 |
+| 质量 | 总览、趋势、字段质量、问题筛选、基线展示、告警启停 |
+| 洞察 | 字段关系、对象关联、Schema、血缘、影响、建议与回归展示；依赖部署支持 |
+| 规则 | JSONC 与可视化编辑、字段校验、转换、PII、valueParsers、expectations |
+| 导出 | JSON、CSV、Markdown、HTML、JSON Schema、Excel；当前没有 PDF 导出入口 |
+| 界面 | 中英文、系统／浅色／深色／护眼主题、键盘弹窗与侧栏调宽、窄屏布局 |
+
+可选择 JSON、JSONL、CSV、Excel、XML、YAML、TXT、ZIP、GZ 等文件；具体解析格式和压缩包能力以配套后端为准。前端不包含该后端服务。
+
+文件达到 2 MiB 时默认使用后台任务，也可强制异步。SSE 不可用或断连时回退轮询。取消提交会等待返回的 jobId 后补发取消；离开页面只停止本地跟踪，保留后端长任务。若网络中断导致 jobId 未返回，前端无法单独保证服务端任务已取消。
+
+API 成功且没有数据时展示空态；接口未实现和请求失败分别记录状态，不会自动补入演示指标。演示模式主要覆盖平台总览、趋势、字段、问题、基线与告警样例；分析工作台仍依赖后端。后端明确声明能力为 false 时，对应导航和页面禁用；旧后端没有能力接口时继续兼容探测。
+
+CSV 导出会在以公式符号开头的文本前增加单引号，防止表格软件执行公式；原始 JSON 导出不修改文本。超大报告的浏览器导出资源消耗，以及不同表格软件对文本的显示行为，需要结合真实数据验证。
+
+## 代码结构
+
+```text
 src/
-  App.jsx            工作台布局、数据源与规则编排、分析提交
-  api.js             Mini API 客户端（超时、错误处理、地址覆盖）
-  adapter.js         后端 camelCase 响应 → 前端内部结构的适配层
-  exporters.js       报告导出（JSON/CSV/Markdown/HTML/JSON Schema/Excel/PDF）
-  schemaDiff.js      Schema 快照与 Diff
-  theme.js           主题模式（跟随系统/浅色/深色）与图表配色表
-  utils.js           展示用常量（质量检查项中文标签）
-  components/        字段明细表、深度分析、取值分布、质量报告、规则编辑器、主题切换等
+  main.jsx / App.jsx        应用入口、按页面懒加载的路由
+  layout/                  页面框架
+  pages/                   平台业务页面
+  workbench/               工作台编排与展示布局
+  hooks/                   规则、预检、分析、导出、焦点与请求生命周期
+  api/                     HTTP、分析接口、平台接口与兼容路径探测
+  lib/                     平台聚合、状态、规范化、主题、能力与多语言
+  adapter.js               分析响应到展示模型的适配
+  exporters.js              文本报告和 Schema 生成
+  styles/index.css          样式总入口及覆盖顺序
+public/                    图标等静态文件
+scripts/                   源码检查与构建体积检查
+tests/                     Node test runner 业务回归
+.github/workflows/ci.yml    安装、检查、测试、构建与体积预算
 ```
 
-标签页：**字段明细 / 深度分析 / 取值分布 / 质量报告**。其中「取值分布」直接渲染后端返回的 `valueCounts`，因此大文件、压缩包、Excel 等无法在浏览器展开的数据源同样可用。
+主题运行时由 `theme-controller` 管理，首屏由 index.html 预置；测试约束两者模式解析一致。产品主题令牌位于 `styles/product.css`，旧组件兼容令牌位于 `styles.css`；图表配色位于 `theme.js`。旧工作台覆盖文件已停用，保留文件不代表仍在加载。
 
-## 功能概览
+## 进一步阅读
 
-- **字段明细**：覆盖率、类型分布、高频值、数值剖析（min/max/avg/中位数/P90/P95/P99/标准差）、直方图、IQR 异常值、日期剖析与直方图
-- **深度分析**：字段相关性（Pearson + Spearman）、字符串模式、Unicode 卫生、时间分布与趋势、Schema 快照 Diff。全部由后端计算，未开启的开关对应卡片会显示引导提示（前端不再本地补算）
-- **质量校验**：规则面板支持 `required` / `enum` / `range` / `pattern` / `unique` / `nullRateMax` / `expectations`，以及 `transform`（json/jwt/base64/url 解析后多级展开）
-- **规则支持 JSONC**：规则配置可写 `//` 与 `/* */` 注释、容忍尾随逗号（见 `src/utils.js` 的 `stripJsonComments` / `parseJsonc`）
-- **规则校验走后端**：点「校验」或「应用规则」时提交给 `POST /api/rules/validate`，由后端的 `AnalysisRules` 反序列化做权威检查。两段式：本地先查语法（能给出编辑器里的行列），通过后交后端查结构与类型。后端能查出 `"minValue": "abc"` 这类类型错误（`JSON.parse` 会放行）
-- **拼错的规则名直接报错**：`System.Text.Json` 默认静默忽略不认识的键（规则看似生效实则没有），校验接口额外扫描并返回 `unknowns`，带上路径和建议写法（如 `fields.age` 的 `minValue2` → `minValue`）。这类问题**判为校验失败**（红色错误条逐条列出改法），并阻断分析——否则跑出来的结果看着正常，实则那条规则压根没生效。分析接口 `/api/analyze` 同样会拦截并返回 400。确实要放行：校验加 `?strict=false`（只警告），分析加表单字段 `allowUnknownRules=true`；CLI 加 `--allow-unknown-rules`
-- **导入导出**：多格式导入；报告可导出为 JSON、CSV、Markdown、HTML、JSON Schema、Excel、PDF
-- **CSV 数值列推断**：CSV 没有类型信息，后端（MiniExcel）取出的单元格一律是字符串，因此默认把「看起来是数字」的还原成 `long`/`double`，让 CSV 也能拿到均值 / 标准差 / 分位数 / 直方图 / 相关性。界面「数据源」区可关（存 `localStorage.apiCsvInferNumbers`），对应后端参数 `csvInferNumbers` / CLI `--no-csv-number-inference`
-- **推断是保守的**：以下一律**保持字符串**，宁可漏转也不误转——前导零（`007` 是编码不是数字 7）、超过 15 位（精度风险）、科学计数法、千分位、带单位。**只作用于 CSV**：xlsx 单元格自带类型，JSON 的数字本来就是数字
-- **明暗主题**：顶栏右侧三档切换（跟随系统 / 浅色 / 深色），选择存 `localStorage`。存的是「模式」而非明暗结果，因此跟随系统时系统偏好一变会立即跟着变，手动选过则不受系统影响。首屏由 `index.html` 的内联脚本预置 `data-theme`，不会闪色
+- [使用指南](docs/user-guide.md)
+- [生产部署与验收](docs/deployment.md)
+- [API 对接契约与待联调项](docs/frontend-api-gaps.md)
+- [优化清单与实施记录](docs/project-optimization-plan.md)
 
-### 主题实现约定
-
-- **明暗只写 `<html data-theme="light|dark">`**，样式表里不出现 `prefers-color-scheme` 媒体查询——否则「手动选深色但系统是浅色」时两套规则会打架。系统偏好只在 JS 里解析（见 `src/theme.js` 的 `resolveTheme`）
-- **颜色令牌化**：`styles.css` 的 `:root` 是深色，浅色只在 `[data-theme='light']` 里覆盖同名变量（当前 86 个令牌，浅色覆盖 84 个，仅尺寸类的 `--radius` / `--sidebar-w` 不覆盖）。改配色只动这两块，不要在组件里写死颜色
-- **图表是例外**：recharts 的 `stroke` / `fill` / `stopColor` 是 SVG 呈现属性，**不解析 `var(--x)`**，所以图表颜色只能在 JS 里按主题取值——统一放在 `src/theme.js` 的 `CHART_COLORS`，与 CSS 变量各存一份，改配色时两处都要动
-- 导出的 HTML 报告是独立文件，拿不到界面主题，改用 `prefers-color-scheme` 跟随阅读者的系统偏好
-
-## 已知限制
-
-- **模糊去重不可用**：后端 `ObjectAnalyzer.Analyze` 不产出 `FuzzyDuplicates`（该结果只在 CLI 的 `AnalysisRunner` 路径生成），界面上该卡片标注「未开启」。需要这项能力得改后端，让 API 路径也执行该逻辑
-- 相关性有前置条件：至少 2 个数值字段且每字段样本数 ≥ 3，否则后端返回空
-- 分布快照依赖 CLI 的 `--snapshot` 导出文件，API 响应不返回，界面上该项置灰标注「仅 CLI」
-- 后端不返回原始记录，因此没有行级「数据预览」；改用「取值分布」展示各字段高频值
-- 后端的 `System.Text.Json` 规则反序列化开了 `ReadCommentHandling.Skip`（**能读注释**），但没开 `AllowTrailingCommas`（**不接受尾随逗号**）。因此提交分两种形态：校验用 `toBackendRulesText()`（只去尾随逗号、保留注释与换行，保证后端报错的 `LineNumber` 能对齐编辑器），分析用 `toJsonText()`（压成紧凑 JSON）
-- 后端规则校验**不认尾随逗号**，而前端允许；若不做清洗，用户写了尾随逗号会被后端报成语法错误——属于前端特性与后端能力的落差，已在清洗层抹平
-- 未知规则名的检查实现在 Core（`ObjectAnalyzer.Core/Analysis/Rules/RulesLint.cs`，对规则原文做旁检查），API 与 CLI 共用。没有开 `JsonUnmappedMemberHandling.Disallow`（那会让含历史字段的旧规则文件直接加载失败），而是在**反序列化之前**先扫一遍原文拦下来
-- 大文件上传耗时取决于网络与后端解析，浏览器端不再有计算开销
-
-## 本地环境注意事项
-
-- `npm install` 需带 `--cache ./.npm-cache`（全局缓存目录不可写时会静默失败）
-- Vite 重启批量删除 `node_modules/.vite/deps` 会被安全删除拦截，用 `mv node_modules/.vite node_modules/.vite.bak` 重命名绕过
-- `npm run build` 前先 `rm -rf dist`，避免清空 dist 时触发同样的拦截
+本次已验证前端回归、构建、首屏体积，以及英文工作台、弹窗焦点和 390px 布局。真实后端写入、服务端能力和生产反向代理仍需目标环境联调；CI 文件已加入仓库，远端执行结果需推送后查看。

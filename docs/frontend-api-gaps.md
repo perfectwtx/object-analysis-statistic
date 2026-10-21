@@ -1,284 +1,95 @@
-# 前端完善所需的后端 API 清单
+# API 对接契约与待联调项
 
-> 对照前端仓库 `object-analysis-statistic`（`src/api/platform.js`、各 Dashboard 页）与后端 `ObjectAnalysisStatistic`（`src/ObjectAnalyzer.Api/Endpoints/*`）。  
-> 目标：让质量 Dashboard、问题中心、基线、告警、血缘/影响等页面从 mock 切到真实数据。
+更新：2026-10-21。本文描述当前前端的请求方式，不是后端实现完成证明。真实路由、请求体和鉴权以目标部署的接口文档与实际响应为准。
 
----
+## 1. 请求与错误约定
 
-## 1. 现状摘要
+默认 API 前缀为 `/api`，可通过 `VITE_API_BASE` 或旧版 localStorage 覆盖项修改。客户端统一处理超时、HTTP 错误、请求取消和 JSON／文本响应。
 
-| 模块 | 后端 | 前端 | 主要卡点 |
-|------|------|------|----------|
-| 同步/异步分析 | ✅ 已有 | ✅ 已接 | — |
-| Preflight / 规则校验 | ✅ 已有 | ✅ 已接 | — |
-| 作业历史 | ✅ `/api/analysis/jobs` | 多路径探测 | **路径不一致** |
-| 质量 Dashboard / 趋势 / 字段 | ✅ `/api/quality/*` | 部分探测 | **路径不一致** |
-| 问题中心 | ✅ `/api/issues` | 已接尝试 | 缺运营写接口 |
-| 血缘 / Impact | ✅ 文档 + 端点 | 占位页 | 需统一路径与空态 |
-| 基线 / 告警 | 有 Endpoint 文件 | 有页面 | **CRUD 路径与 FE 对齐** |
-| Capabilities | ❌ | 探测中 | **建议新增** |
+兼容探测将 404、405、501 视为路径或方法未实现；其他错误直接交由调用方处理。成功路径按后端地址、方法和路径组缓存，部分列表接口的未实现结果缓存 30 秒，能力探测也缓存 30 秒。切换 API 地址不会共用路径发现结果。
 
-**结论：** 分析主链路已够用；Dashboard 体系后端多数能力已实现，优先做 **路径别名 + capabilities + 基线/告警对齐**，再补问题运营写接口。
+`source: 'api'` 只表示真实数据模式，不表示每个模块都可用。各模块独立记录 api、unavailable 或 error 状态；真实空数组保持为空，缺失分数保持 null。
 
----
+## 2. 能力声明
 
-## 2. 路径对齐（优先，成本最低）
-
-前端 `tryPaths` 会依次尝试多个路径，第一个非 404 才采用。后端真实路径与探测列表不一致时，会落到 mock。
-
-### 2.1 建议后端增加的别名（推荐）
-
-在现有实现上增加路由别名，避免改前端所有调用方：
-
-| 别名 | 指向现有实现 |
-|------|----------------|
-| `GET /api/jobs` | `GET /api/analysis/jobs` |
-| `GET /api/jobs/{jobId}` | `GET /api/analysis/jobs/{jobId}` |
-| `GET /api/jobs/{jobId}/result` | `GET /api/analysis/jobs/{jobId}/result` |
-| `GET /api/jobs/{jobId}/fields` | `GET /api/quality/fields/{jobId}` |
-| `GET /api/jobs/{jobId}/lineage` | `GET /api/analysis/jobs/{jobId}/lineage` |
-| `GET /api/jobs/{jobId}/impact` | `GET /api/analysis/jobs/{jobId}/impact` |
-| `GET /api/jobs/{jobId}/schema-impact` | `GET /api/quality/schema-impact/{jobId}` |
-| `GET /api/quality/snapshots` | `GET /api/quality/trend`（或同等快照列表） |
-| `GET /api/quality/snapshots/{jobId}/fields` | `GET /api/quality/fields/{jobId}` |
-
-### 2.2 后端已有、前端应优先使用的路径
-
-| 能力 | 后端实际路径 |
-|------|----------------|
-| 作业列表 | `GET /api/analysis/jobs?limit=` |
-| 作业详情 | `GET /api/analysis/jobs/{jobId}` |
-| 作业结果 | `GET /api/analysis/jobs/{jobId}/result` |
-| 作业总览 | `GET /api/analysis/jobs/{jobId}/overview` |
-| 质量总览 | `GET /api/quality/dashboard` |
-| 质量趋势 | `GET /api/quality/trend?sourceName=&limit=` |
-| 可查字段质量的作业 | `GET /api/quality/fields` |
-| 字段质量 | `GET /api/quality/fields/{jobId}` |
-| 字段相关矩阵 | `GET /api/quality/relationships/{jobId}` |
-| 对象关系 | `GET /api/quality/object-relationships/{jobId}` |
-| Schema 影响 | `GET /api/quality/schema-impact/{jobId}` |
-| 修复建议 | `GET /api/quality/recommendations` |
-| 质量回归 | `GET /api/quality/regression` |
-| 问题中心 | `GET /api/issues?jobId=` |
-| 某作业问题 | `GET /api/issues/{jobId}` |
-
----
-
-## 3. 建议新增 / 补齐的接口
-
-### 3.1 P0 — Dashboard 与能力探测
-
-#### `GET /api/capabilities`
-
-返回当前部署已启用的模块，前端据此隐藏/展示菜单与是否走 mock。
-
-**响应示例：**
+前端尝试 `GET /capabilities`，其次 `GET /meta/capabilities`。支持直接对象或 `{ capabilities: {...} }`；只有布尔值参与能力判断。
 
 ```json
 {
   "analyze": true,
-  "asyncAnalyze": true,
-  "preflight": true,
   "qualityDashboard": true,
   "qualityTrend": true,
+  "fieldQuality": true,
   "issues": true,
   "baselines": true,
   "alertRules": true,
-  "lineage": true,
+  "relationships": true,
+  "objectRelationships": true,
+  "schemaImpact": false,
+  "lineage": false,
   "impact": true,
-  "webhooks": true
+  "recommendations": true,
+  "regression": true
 }
 ```
 
-也可使用：`GET /api/meta/capabilities`。
+明确 false 会隐藏对应导航并阻止该页面展示；缺少声明是“未知”，不会误判为禁用。旧后端没有能力端点时继续按现有路径探测。能力声明主要控制导航／页面；当前总览仍会探测其模块，不能把能力声明当成后端权限控制。
 
-#### 确认已注册且可访问
+## 3. 分析主链路
 
-- `GET /api/quality/dashboard`
-- `GET /api/analysis/jobs`
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| GET | `/health` | 可达性探测 |
+| POST | `/rules/validate` | 原始 JSON 文本校验；可选 `strict=false` |
+| GET | `/rules/reference` | JSONC 参考文本 |
+| POST | `/preflight` | multipart 预检 |
+| POST | `/analyze` | multipart 同步分析 |
+| POST | `/analyze/async` | multipart 提交异步作业 |
+| GET | `/analyze/async/{jobId}` | 状态与结果 |
+| GET | `/analyze/async/{jobId}/events` | SSE 进度 |
+| POST | `/analyze/async/{jobId}/cancel` | 请求取消 |
 
-异步作业完成后必须写入 `IAnalysisHistoryStore`，否则历史列表为空。
+预检与正式分析复用同一个表单构造函数：file、rulesJson、flatten、csvInferNumbers、allowUnknownRules、maxValues、fields、filter、rootPath、recordPath、sampleReservoir、sampleStep、maxParallel，以及启用的特征开关。
 
----
+规则中 selectedFields 和 filter 优先于界面 runtime 的同名选项；flatten 优先读取显式规则值、规则 runtime.flatten，再读取运行设置。字段规则正文与请求层选项由纯函数构造，采样和并行参数必须是正整数。
 
-### 3.2 P1 — 问题中心可运营
+异步提交需要 jobId 或 JobId。前端将 Running、Queued、Pending、Submitted 视为处理中；Completed、Succeeded、Success 视为成功，Cancelled／Canceled 视为取消，其他终态报告错误。状态与结果响应预期使用 camelCase 字段，未宣称支持任意大小写组合。
 
-查询已有；建议补状态与聚合，便于 Issue Center 从只读变为可办。
+SSE 使用 progress、complete、gone 事件。complete 后再读取作业结果；SSE 失败回退轮询。轮询默认 1 秒，连续故障退避到最多 15 秒，默认连续 5 次错误停止；404 和 410 立即停止。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/issues/summary` | 按 severity / check / field 聚合 |
-| `GET` | `/api/issues?jobId=&severity=&check=&status=&limit=&offset=` | 统一筛选与分页 |
-| `PATCH` 或 `PUT` | `/api/issues/{jobId}/{fieldName}/{check}/status` | 更新状态：`Open` / `InProgress` / `Resolved` / `Ignored` |
+## 4. 平台标准路径
 
-**已有可继续用：**
+| 能力 | 优先请求路径 |
+| --- | --- |
+| 作业列表／详情／结果 | `/analysis/jobs`、`/analysis/jobs/{id}`、`/analysis/jobs/{id}/result` |
+| 删除作业 | `DELETE /analysis/jobs/{id}` |
+| 质量总览 | `/quality/dashboard` |
+| 趋势与快照 | `/quality/trend?limit=30`，总览内复用一次响应 |
+| 字段质量 | `/quality/fields/{jobId}` |
+| 字段关系 | `/quality/relationships/{jobId}` |
+| 对象关系 | `/quality/object-relationships/{jobId}` |
+| Schema 影响 | `/quality/schema-impact/{jobId}` |
+| 问题列表 | `/issues?jobId=&limit=` |
+| 修复建议 | `/quality/recommendations` |
+| 质量回归 | `/quality/regression` |
+| 基线 | `/quality-baselines`，兼容 `/quality/baselines` |
+| 告警 | `/alert-rules`，兼容 `/alerts/rules`、`/quality/alert-rules` |
+| 血缘 | `/analysis/jobs/{jobId}/lineage` |
+| 影响 | `/analysis/jobs/{jobId}/impact` |
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/issues/{jobId}/responsibilities` | 责任人 |
-| `PUT` | `/api/issues/{jobId}/responsibilities/{fieldName}/{check}` | 保存责任分配 |
-| `GET` | `/api/issues/{jobId}/remediations/{fieldName}/{check}` | 整改记录 |
-| `POST` | `/api/issues/{jobId}/remediations` | 新增整改 |
+完整候选路径以 `src/api/platform.js` 为准。列表适配支持数组或 items、jobs、snapshots、issues、fields、rules、baselines 等包装；领域字段由 normalize 和 normalize-extract 处理。分页仍由具体接口决定，前端 limit 不代表已实现全量翻页。
 
----
+告警启停会在列表成功路径下 PUT `{id}`，保留原始规则中的阈值、Webhook 等字段并修改 enabled。需要联调确认目标后端接受此完整更新请求，以及返回成功是否表示持久化已完成。
 
-### 3.3 P2 — 质量基线
+基线页面目前以展示为主，客户端的写入封装不等于页面已提供完整 CRUD。问题状态写接口也不代表已形成完整责任分派和整改流程。
 
-前端页面：`BaselinesPage`；客户端：`listBaselines` / `createBaseline` / `updateBaseline` / `deleteBaseline`。
+## 5. 尚需目标后端确认
 
-| 方法 | 建议路径 | 说明 |
-|------|----------|------|
-| `GET` | `/api/quality-baselines` | 列表 |
-| `POST` | `/api/quality-baselines` | 创建 |
-| `GET` | `/api/quality-baselines/{id}` | 详情 |
-| `PUT` | `/api/quality-baselines/{id}` | 更新 |
-| `DELETE` | `/api/quality-baselines/{id}` | 删除 |
-| `POST` | `/api/quality-baselines/{id}/evaluate?jobId=` | 相对某次作业评估（可选） |
+- 异步分析与同步分析何时写入历史和质量快照，是否返回可复用的持久化作业 ID。
+- 取消是否幂等、是否允许取消排队作业、取消失败后的状态如何查询。
+- 预检是否支持上述全部字段，未开启特征如何表达 unavailable、reason 和空结果。
+- 告警和基线更新的 PUT 请求体与路径；问题状态、权限及鉴权契约。
+- SSE 经代理后是否实时送达，跨域或 Cookie 鉴权是否与 fetch 一致。
+- 大报告服务端导出、分布快照与模糊去重等能力是否在当前 API 版本提供。
 
-若后端已是 `/api/quality/baselines`，请与前端约定统一，或两边都支持别名。
-
-**创建 body 示例：**
-
-```json
-{
-  "name": "生产主链路基线",
-  "sourceName": "orders.json",
-  "minOverallScore": 80,
-  "minCompleteness": 0.95,
-  "maxCriticalIssues": 0
-}
-```
-
----
-
-### 3.4 P2 — 告警规则与 Webhook
-
-前端页面：`AlertRulesPage`；客户端：`listAlertRules`、`listWebhookDeliveries`。
-
-| 方法 | 建议路径 | 说明 |
-|------|----------|------|
-| `GET` | `/api/alert-rules` | 规则列表 |
-| `POST` | `/api/alert-rules` | 创建 |
-| `GET` | `/api/alert-rules/{id}` | 详情 |
-| `PUT` | `/api/alert-rules/{id}` | 更新（阈值、启用、Webhook URL） |
-| `DELETE` | `/api/alert-rules/{id}` | 删除 |
-| `GET` | `/api/webhooks/deliveries?limit=&status=` | Outbox 投递记录 |
-| `POST` | `/api/webhooks/deliveries/{id}/retry` | 失败重试（可选） |
-
-**规则 body 示例：**
-
-```json
-{
-  "name": "质量分低于 70",
-  "enabled": true,
-  "condition": "overallScoreBelow",
-  "threshold": 70,
-  "webhookUrl": "https://example.com/hooks/oa"
-}
-```
-
-文档中已支持的条件类型可映射为：`overallScoreBelow`、`completenessBelow`、`scoreDrop`、`criticalIssue`、`breakingSchemaChange`、`distributionDrift`。
-
----
-
-### 3.5 P3 — 血缘 / 影响 / 关系
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/analysis/jobs/{jobId}/lineage` | 数据血缘 |
-| `GET` | `/api/analysis/jobs/{jobId}/impact` | 变更影响 |
-| `GET` | `/api/quality/object-relationships/{jobId}` | 对象关系 |
-| `GET` | `/api/quality/relationships/{jobId}` | 字段相关矩阵 |
-| `GET` | `/api/quality/schema-impact/{jobId}` | Schema Diff |
-
-**空态约定（建议）：** 深度分析未开启时不要只返回空数组，明确说明原因，例如：
-
-```json
-{
-  "available": false,
-  "reason": "correlation not enabled for this job",
-  "data": null
-}
-```
-
----
-
-### 3.6 P4 — 可选增强
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `GET` | `/api/analysis/jobs/{jobId}/export?format=json\|csv\|xlsx` | 服务端导出大结果 |
-| `GET` | `/api/rules/reference` | 全量规则参考模板（JSONC） |
-| `POST` | `/api/rules/validate` | 与现有校验路径统一对外名 |
-| `GET` | `/api/health`、`GET /api/ready` | 前端 BackendStatus |
-| — | 异步取消后 history 状态同步为 `Cancelled` | 与 Registry 一致 |
-
----
-
-## 4. 分析主链路（已具备，保持即可）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| `POST` | `/api/analyze` | 同步分析（multipart） |
-| `POST` | `/api/analyze/async` | 异步提交 |
-| `GET` | `/api/analyze/async/{jobId}` | 状态 / 结果 |
-| `GET` | `/api/analyze/async/{jobId}/events` | SSE 进度 |
-| `POST` | `/api/analyze/async/{jobId}/cancel` | 取消 |
-| `POST` | `/api/preflight` | 预处理 / 样本字段 |
-| — | 规则校验 / 参考模板 | 见 `RulesEndpoints` |
-
-表单字段需继续支持：`file`、`rulesJson`、`flatten`、`csvInferNumbers`、`features`、`valueParsers`（经 rules）、以及 runtime 相关选项。
-
----
-
-## 5. 推荐落地顺序
-
-```text
-1. 路径别名（/api/jobs、/quality/snapshots…）或前端 tryPaths 改真实路径
-2. GET /api/capabilities
-3. 确认 dashboard + analysis/jobs 有数据（异步成功写入 history）
-4. 基线 CRUD 路径与 FE 对齐
-5. 告警规则 CRUD + webhook deliveries
-6. Issue status / summary
-7. lineage / impact 空态与持久化可读性
-8. 导出 / 健康检查等可选项
-```
-
----
-
-## 6. 验收清单（前端视角）
-
-- [ ] `GET /api/analysis/jobs` 或 `/api/jobs` 能列出最近异步作业
-- [ ] `GET /api/quality/dashboard` 返回最近成功分析的五维分与 top issues
-- [ ] `GET /api/quality/trend` 有时间序列快照
-- [ ] `GET /api/quality/fields/{jobId}` 字段表可渲染
-- [ ] `GET /api/issues` Issue Center 可筛选
-- [ ] 基线页可增删改查
-- [ ] 告警页可列出规则；deliveries 可查
-- [ ] 血缘/影响页在给定 `jobId` 下返回结构化数据或明确 `available: false`
-- [ ] `GET /api/capabilities` 与菜单显隐一致
-
----
-
-## 7. 相关代码位置
-
-**后端**
-
-- `src/ObjectAnalyzer.Api/Endpoints/QualityEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/IssueEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/AsyncAnalyzeEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/DataLineageEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/ImpactAnalysisEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/QualityBaselineEndpoints.cs`
-- `src/ObjectAnalyzer.Api/Endpoints/AlertRuleEndpoints.cs`
-- `docs/api.md`、`docs/issues.md`、`docs/alerts.md`、`docs/history.md`
-
-**前端**
-
-- `src/api/platform.js` — 平台 API 与 `tryPaths`
-- `src/api/analyze.js` — 分析 / preflight / 规则
-- `src/pages/*` — Dashboard、Issue、Baseline、Alert、Lineage 等页
-
----
-
-*文档版本：与 2026-09 前后端对照整理。接口细节以运行中的 OpenAPI / Scalar 为准。*
+本次前端自动化使用受控响应验证请求行为；本地后端未连通，未对真实业务作业或告警执行写入测试。
