@@ -14,7 +14,6 @@ const ICONS = {
 export default function ThemeSwitch({ compact = false }) {
   const { mode, setMode, theme } = useTheme();
   const locale = usePlatform((s) => s.locale);
-  const setStoreTheme = usePlatform((s) => s.setTheme);
 
   return (
     <div
@@ -45,7 +44,7 @@ export default function ThemeSwitch({ compact = false }) {
                 ? `${label} (${theme === 'dark' ? t(locale, 'themeDark') : t(locale, 'themeLight')})`
                 : label
             }
-            onClick={() => { setMode(m.key); setStoreTheme(m.key); }}
+            onClick={() => setMode(m.key)}
           >
             <Icon className="size-3.5 shrink-0" />
             {!compact ? <span className="hidden sm:inline">{label}</span> : null}

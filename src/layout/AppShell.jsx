@@ -2,7 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Suspense, useEffect } from 'react';
 import LoadingBlock from '../components/ui/LoadingBlock.jsx';
 import { TopNav } from '../components/layout/TopNav.jsx';
-import { hydrateTheme, hydrateLocale, usePlatform } from '../lib/store.js';
+import { hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
 import ProductTour from '../components/tour/ProductTour.jsx';
 import { routeEnabled } from '../lib/capabilities.js';
@@ -20,7 +20,6 @@ export default function AppShell() {
   const capabilities = usePlatform((s) => s.capabilities);
 
   useEffect(() => {
-    hydrateTheme();
     hydrateLocale();
     refresh();
   }, [refresh]);

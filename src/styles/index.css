@@ -1,0 +1,5 @@
+/* 顺序即覆盖契约：产品令牌与 Tailwind → 旧组件兼容 → 进度 → 平台布局。 */
+@import './product.css';
+@import '../styles.css';
+@import '../job-progress.css';
+@import './dashboard.css';

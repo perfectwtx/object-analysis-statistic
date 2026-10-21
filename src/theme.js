@@ -1,104 +1,25 @@
-// 主题：跟随系统 / 浅色 / 深色 / 护眼
-// data-theme: light | dark | eyecare
+import { useSyncExternalStore } from 'react';
+import { createThemeController } from './lib/theme-controller.js';
 
-import { useCallback, useEffect, useState } from 'react';
-
-const MODE_KEY = 'themeMode';
-const CHANGE_EVENT = 'oa-theme-change';
-
+let storage;
+try { storage = typeof localStorage !== 'undefined' ? localStorage : undefined; } catch { /* private mode */ }
+const browser = typeof window === 'undefined' ? undefined : window;
+const controller = createThemeController({
+  storage, document: typeof document === 'undefined' ? undefined : document,
+  matchMedia: browser?.matchMedia?.bind(browser),
+  addEventListener: browser?.addEventListener?.bind(browser), removeEventListener: browser?.removeEventListener?.bind(browser),
+});
 export const THEME_MODES = [
-  { key: 'system', labelKey: 'themeSystem' },
-  { key: 'light', labelKey: 'themeLight' },
-  { key: 'dark', labelKey: 'themeDark' },
-  { key: 'eyecare', labelKey: 'themeEyecare' },
+  { key: 'system', labelKey: 'themeSystem' }, { key: 'light', labelKey: 'themeLight' },
+  { key: 'dark', labelKey: 'themeDark' }, { key: 'eyecare', labelKey: 'themeEyecare' },
 ];
-
-const hasDom = typeof window !== 'undefined' && typeof document !== 'undefined';
-
-const darkQuery = hasDom && window.matchMedia
-  ? window.matchMedia('(prefers-color-scheme: dark)')
-  : null;
-
-export function getMode() {
-  if (!hasDom) return 'system';
-  try {
-    const saved = localStorage.getItem(MODE_KEY);
-    return THEME_MODES.some((m) => m.key === saved) ? saved : 'system';
-  } catch {
-    return 'system';
-  }
-}
-
-export function resolveTheme(mode) {
-  if (mode === 'light' || mode === 'dark' || mode === 'eyecare') return mode;
-  return darkQuery && !darkQuery.matches ? 'light' : 'dark';
-}
-
-export function applyTheme(mode = getMode()) {
-  const theme = resolveTheme(mode);
-  if (!hasDom) return theme;
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme =
-    theme === 'dark' ? 'dark' : 'light';
-  document.documentElement.classList.toggle('light', theme === 'light');
-  document.documentElement.classList.toggle('eyecare', theme === 'eyecare');
-  document.documentElement.classList.toggle('dark', theme === 'dark');
-  return theme;
-}
-
-export function persistMode(mode) {
-  const next = THEME_MODES.some((m) => m.key === mode) ? mode : 'system';
-  try {
-    localStorage.setItem(MODE_KEY, next);
-    localStorage.setItem('oa-theme', next === 'system' ? resolveTheme(next) : next);
-  } catch {
-    /* ignore */
-  }
-  return applyTheme(next);
-}
-
+export const getMode = () => controller.getSnapshot().mode;
+export const resolveTheme = controller.resolve;
+export const applyTheme = controller.apply;
+export const persistMode = controller.setMode;
 export function useTheme() {
-  const [mode, setModeState] = useState(getMode);
-  const [theme, setTheme] = useState(() => resolveTheme(getMode()));
-
-  useEffect(() => {
-    setModeState(getMode());
-    setTheme(applyTheme());
-  }, []);
-
-  useEffect(() => {
-    const sync = () => {
-      setModeState(getMode());
-      setTheme(applyTheme());
-    };
-    const onSystem = () => {
-      if (getMode() === 'system') sync();
-    };
-
-    if (darkQuery) {
-      if (darkQuery.addEventListener) darkQuery.addEventListener('change', onSystem);
-      else darkQuery.addListener(onSystem);
-    }
-    window.addEventListener(CHANGE_EVENT, sync);
-    window.addEventListener('storage', sync);
-
-    return () => {
-      if (darkQuery) {
-        if (darkQuery.removeEventListener) darkQuery.removeEventListener('change', onSystem);
-        else darkQuery.removeListener(onSystem);
-      }
-      window.removeEventListener(CHANGE_EVENT, sync);
-      window.removeEventListener('storage', sync);
-    };
-  }, []);
-
-  const setMode = useCallback((next) => {
-    setModeState(next);
-    setTheme(persistMode(next));
-    window.dispatchEvent(new Event(CHANGE_EVENT));
-  }, []);
-
-  return { mode, setMode, theme };
+  const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
+  return { ...snapshot, setMode: controller.setMode };
 }
 
 export const CHART_COLORS = {

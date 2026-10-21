@@ -10,7 +10,6 @@ export const usePlatform = create((set, get) => ({
   loading: false,
   error: null,
   lastLoadedAt: null,
-  theme: 'dark',
   locale: 'zh',
 
   capabilities: {}, capabilitiesError: null, backendBase: null,
@@ -62,30 +61,6 @@ export const usePlatform = create((set, get) => ({
     }
   },
 
-  setTheme: (mode) => {
-    const allowed = ['light', 'dark', 'eyecare', 'system'];
-    const next = allowed.includes(mode) ? mode : 'dark';
-    let resolved = next;
-    if (next === 'system' && typeof window !== 'undefined' && window.matchMedia) {
-      resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    }
-    set({ theme: resolved === 'system' ? 'dark' : resolved });
-    if (typeof document !== 'undefined') {
-      const theme = resolved === 'system' ? 'dark' : resolved;
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.classList.toggle('light', theme === 'light');
-      document.documentElement.classList.toggle('eyecare', theme === 'eyecare');
-      document.documentElement.classList.toggle('dark', theme === 'dark');
-      document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
-      try {
-        localStorage.setItem('oa-theme', theme);
-        localStorage.setItem('themeMode', next);
-      } catch {
-        /* ignore */
-      }
-    }
-  },
-
   /** 本地先去掉一条作业（删除 API 成功后调用），再可选 refresh */
   removeJobLocal: (jobId) => {
     const id = String(jobId || '');
@@ -128,17 +103,6 @@ export const usePlatform = create((set, get) => ({
     }
   },
 }));
-
-export function hydrateTheme() {
-  try {
-    const t = localStorage.getItem('themeMode') || localStorage.getItem('oa-theme');
-    if (t === 'light' || t === 'dark' || t === 'eyecare' || t === 'system') {
-      usePlatform.getState().setTheme(t);
-    }
-  } catch {
-    /* ignore */
-  }
-}
 
 export function hydrateLocale() {
   try {
