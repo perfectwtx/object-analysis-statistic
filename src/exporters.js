@@ -11,8 +11,8 @@ export function download(content, fileName, mime = 'text/plain') {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  document.body.appendChild(a);
+  try { a.click(); } finally { a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
 }
 
 // ---------- JSON ----------
@@ -22,8 +22,9 @@ export function toJson(result) {
 
 // ---------- CSV ----------
 function csvCell(v) {
-  const s = v === null || v === undefined ? '' : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v === null || v === undefined ? '' : String(v);
+  if (typeof v === 'string' && /^[\s\uFEFF]*[=+@-]/.test(s)) s = "'" + s;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function toCsv(result) {
@@ -43,10 +44,15 @@ export function toCsv(result) {
 }
 
 // ---------- Markdown ----------
+function mdCell(v) {
+  return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\r\n|\r|\n/g, '<br>');
+}
+
 export function toMarkdown(result, fileName) {
   const L = [];
   L.push('# 对象分析报告', '');
-  L.push(`- 数据源：${fileName}`);
+  L.push(`- 数据源：${mdCell(fileName)}`);
   L.push(`- 生成时间：${new Date().toLocaleString()}`);
   L.push(`- 对象总数：${result.totalObjects}（唯一 ${result.totalUniqueObjects}，重复组 ${result.totalDuplicateGroups}）`);
   L.push(`- 字段数：${result.fieldStatistics.length}`, '');
@@ -54,7 +60,7 @@ export function toMarkdown(result, fileName) {
   L.push('| 字段 | 覆盖率 | 主导类型 | 唯一值 | 次数 | 默认值 | 语义类型 |');
   L.push('| --- | --- | --- | --- | --- | --- | --- |');
   for (const f of result.fieldStatistics) {
-    L.push(`| ${f.fieldName} | ${(f.coverage * 100).toFixed(1)}% | ${f.primaryType} | ${f.distinctCount} | ${f.count} | ${f.defaultValue ?? '-'} | ${f.semanticType ?? '-'} |`);
+    L.push(`| ${mdCell(f.fieldName)} | ${(f.coverage * 100).toFixed(1)}% | ${f.primaryType} | ${f.distinctCount} | ${f.count} | ${mdCell(f.defaultValue ?? '-')} | ${mdCell(f.semanticType ?? '-')} |`);
   }
   if (result.qualityViolations) {
     L.push('', '## 质量校验', '');
@@ -64,7 +70,7 @@ export function toMarkdown(result, fileName) {
       L.push('| 字段 | 检查项 | 违规数 | 说明 |');
       L.push('| --- | --- | --- | --- |');
       for (const v of result.qualityViolations) {
-        L.push(`| ${v.field || '（数据集）'} | ${CHECK_LABELS[v.check] || v.check} | ${v.count} | ${v.message} |`);
+        L.push(`| ${mdCell(v.field || '（数据集）')} | ${mdCell(CHECK_LABELS[v.check] || v.check)} | ${v.count} | ${mdCell(v.message)} |`);
       }
     }
   }
@@ -148,7 +154,7 @@ ${violHtml}
 // ---------- JSON Schema ----------
 // 从字段统计重建嵌套结构：a.b.c → 嵌套 properties；tags[0] → array items
 export function toJsonSchema(result) {
-  const newObjNode = () => ({ type: 'object', properties: {}, required: [] });
+  const newObjNode = () => ({ type: 'object', properties: Object.create(null), required: [] });
 
   function ensureChild(node, key, isIndex) {
     if (isIndex) {
@@ -156,8 +162,8 @@ export function toJsonSchema(result) {
       if (!node.items) node.items = newObjNode();
       return node.items;
     }
-    node.properties = node.properties || {};
-    if (!node.properties[key]) node.properties[key] = {};
+    node.properties = node.properties || Object.create(null);
+    if (!Object.hasOwn(node.properties, key)) node.properties[key] = {};
     return node.properties[key];
   }
 

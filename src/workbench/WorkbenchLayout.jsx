@@ -17,7 +17,7 @@ export default function WorkbenchLayout({
   pasteOpen, setPasteOpen, onSubmitPaste, defaultPasteFormat,
   source, runAnalysis, rulesText, cancelAnalysis,
   phase, progress, jobId, asyncError, forceAsync, setForceAsync,
-  result, elapsed, exportOpen, setExportOpen, exportReport, kb,
+  result, elapsed, exporting, exportOpen, setExportOpen, exportReport, kb,
   ruleFieldWarning, tab, setTab, TABS, violationCount,
   deepInsights, features, rules,
   preflightModal, cancelPreflight, confirmPreflight,
@@ -92,7 +92,7 @@ export default function WorkbenchLayout({
                 </div>
               </div>
               <div className="relative">
-                <button type="button" className="h-9 rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)]" onClick={() => setExportOpen((v) => !v)}>导出</button>
+                <button type="button" className="h-9 rounded-lg bg-muted px-3 text-sm shadow-[var(--elev)]" disabled={exporting} aria-busy={exporting} onClick={() => setExportOpen((v) => !v)}>{exporting ? '导出中…' : '导出'}</button>
                 {exportOpen ? (
                   <div className="absolute top-full right-0 z-20 mt-1 min-w-[140px] overflow-hidden rounded-xl bg-card py-1 shadow-[var(--elev)]">
                     {[['json','JSON'],['csv','CSV'],['md','Markdown'],['html','HTML'],['schema','JSON Schema'],['xlsx','Excel']].map(([fmt, label]) => (

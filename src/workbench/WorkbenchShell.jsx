@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { download, toCsv, toHtml, toJson, toJsonSchema, toMarkdown } from '../exporters.js';
+import { useReportExport } from '../hooks/useReportExport.js';
 import {
   fetchRulesReference,
   preflight,
@@ -297,25 +297,10 @@ export default function Workbench() {
     } catch (e) { setRulesError(`拉取参考模板失败：${e.message}`); }
   };
 
-  const exportReport = async (fmt) => {
-    setExportOpen(false);
-    if (!result) return;
-    if (fmt === 'json') download(toJson(result), 'report.json', 'application/json');
-    else if (fmt === 'csv') download(toCsv(result), 'report.csv', 'text/csv');
-    else if (fmt === 'md') download(toMarkdown(result, fileName), 'report.md', 'text/markdown');
-    else if (fmt === 'html') download(toHtml(result, fileName), 'report.html', 'text/html');
-    else if (fmt === 'schema') download(toJsonSchema(result), 'report.schema.json', 'application/json');
-    else if (fmt === 'xlsx') {
-      const XLSX = await import('xlsx');
-      const wb = XLSX.utils.book_new();
-      const rows = result.fieldStatistics.map((f) => ({
-        字段名: f.fieldName, 覆盖率: +(f.coverage * 100).toFixed(1), 主导类型: f.primaryType,
-        唯一值: f.distinctCount, 出现次数: f.count,
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), '字段统计');
-      XLSX.writeFile(wb, 'report.xlsx');
-    }
-  };
+  const { exporting, exportReport } = useReportExport({
+    result, fileName, onClose: () => setExportOpen(false),
+    onError: (e) => setError('导出失败：' + e.message),
+  });
 
   return (
     <WorkbenchLayout
@@ -343,6 +328,7 @@ export default function Workbench() {
       elapsed={elapsed}
       exportOpen={exportOpen}
       setExportOpen={setExportOpen}
+      exporting={exporting}
       exportReport={exportReport}
       kb={kb}
       ruleFieldWarning={ruleFieldWarning}
