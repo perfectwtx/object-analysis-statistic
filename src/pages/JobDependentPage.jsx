@@ -1,3 +1,4 @@
+import { useLatestRequest } from '../hooks/useLatestRequest.js';
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw, Trash2 } from 'lucide-react';
@@ -34,91 +35,52 @@ export default function JobDependentPage({
   const [deleting, setDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setLoadingJobs(true);
-      try {
-        const r = await listJobs({ limit: 40 });
-        if (r.unavailable) {
-          setJobsUnavailable(true);
-          const last = loadLastJobId();
-          if (last) {
-            setJobId(last);
-            setManualId(last);
-          }
-        } else {
-          setJobsUnavailable(false);
-          const list = asList(r.data).map(normalizeJob).filter(Boolean);
-          setJobs(list);
-          setJobId((prev) => {
-            if (prev) return prev;
-            const id = list[0]?.id || loadLastJobId() || '';
-            if (id) setManualId(id);
-            return id;
-          });
-        }
-      } catch (e) {
-        setError(e.message);
-      } finally {
-        setLoadingJobs(false);
-      }
-    })();
-  }, []);
+  const jobsRequest = useLatestRequest();
+  const detailRequest = useLatestRequest();
+  const reloadJobs = useCallback(() => jobsRequest.run(
+    (signal) => listJobs({ limit: 40 }, { signal }), {
+      onStart: () => setLoadingJobs(true),
+      onSuccess: (r) => {
+        setJobsUnavailable(!!r.unavailable);
+        const list = r.unavailable ? [] : asList(r.data).map(normalizeJob).filter(Boolean);
+        setJobs(list);
+        setJobId((prev) => {
+          const id = prev || list[0]?.id || loadLastJobId() || '';
+          if (!prev && id) setManualId(id);
+          return id;
+        });
+      },
+      onError: (e) => setError(e.message), onFinally: () => setLoadingJobs(false),
+    }), [jobsRequest]);
+  useEffect(() => { reloadJobs(); return () => jobsRequest.cancel(); }, [reloadJobs, jobsRequest]);
 
-  const load = useCallback(async (id) => {
+  const load = useCallback((id) => {
     if (!id || !fetchByJobId) return;
-    setFetching(true);
-    setError('');
-    try {
-      const r = await fetchByJobId(id);
-      if (r.unavailable) {
-        setUnavailable(true);
-        setData(null);
-      } else {
-        setUnavailable(false);
-        setData(r.data);
-        saveLastJobId(id);
-      }
-    } catch (e) {
-      setError(e.message);
-      setData(null);
-    } finally {
-      setFetching(false);
-    }
-  }, [fetchByJobId]);
-
+    return detailRequest.run((signal) => fetchByJobId(id, { signal }), {
+      onStart: () => { setFetching(true); setError(''); setData(null); setUnavailable(false); },
+      onSuccess: (r) => {
+        setUnavailable(!!r.unavailable); setData(r.unavailable ? null : r.data);
+        if (!r.unavailable) saveLastJobId(id);
+      },
+      onError: (e) => { setError(e.message); setData(null); },
+      onFinally: () => setFetching(false),
+    });
+  }, [fetchByJobId, detailRequest]);
   useEffect(() => {
     if (jobId) load(jobId);
-  }, [jobId, load]);
-
+    else { detailRequest.cancel(); setData(null); setFetching(false); }
+    return () => detailRequest.cancel();
+  }, [jobId, load, detailRequest]);
   const applyManual = () => {
     const id = manualId.trim();
     if (!id) return;
-    setJobId(id);
-    saveLastJobId(id);
+    if (id === jobId) load(id); else setJobId(id);
   };
-
-  const reloadJobs = useCallback(async () => {
-    setLoadingJobs(true);
-    try {
-      const r = await listJobs({ limit: 40 });
-      if (r.unavailable) {
-        setJobsUnavailable(true);
-        setJobs([]);
-      } else {
-        setJobsUnavailable(false);
-        setJobs(asList(r.data).map(normalizeJob).filter(Boolean));
-      }
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoadingJobs(false);
-    }
-  }, []);
 
   const performDeleteJob = useCallback(async () => {
     const id = jobId || manualId;
     if (!id) return;
+    detailRequest.cancel();
     setDeleting(true);
     setError('');
     try {
@@ -138,7 +100,7 @@ export default function JobDependentPage({
     } finally {
       setDeleting(false);
     }
-  }, [jobId, manualId, reloadJobs, t]);
+  }, [jobId, manualId, reloadJobs, t, detailRequest]);
 
   return (
     <div>
@@ -181,7 +143,7 @@ export default function JobDependentPage({
             <select
               className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary/40"
               value={jobId}
-              disabled={loadingJobs || jobsUnavailable}
+              disabled={loadingJobs || jobsUnavailable || deleting}
               onChange={(e) => {
                 setJobId(e.target.value);
                 setManualId(e.target.value);
@@ -201,10 +163,11 @@ export default function JobDependentPage({
               <input
                 className="h-9 flex-1 rounded-lg border border-border bg-background px-3 font-mono text-sm outline-none focus:border-primary/40"
                 value={manualId}
+                disabled={deleting}
                 onChange={(e) => setManualId(e.target.value)}
                 placeholder="guid / job id"
               />
-              <Button size="sm" variant="secondary" onClick={applyManual}>
+              <Button size="sm" variant="secondary" onClick={applyManual} disabled={deleting}>
                 {t('refresh')}
               </Button>
             </div>

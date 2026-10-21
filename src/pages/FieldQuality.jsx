@@ -1,3 +1,4 @@
+import { useLatestRequest } from '../hooks/useLatestRequest.js';
 import { DEMO_MODE } from '../lib/data-mode.js';
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -24,36 +25,33 @@ export default function FieldQuality() {
   const [source, setSource] = useState(DEMO_MODE ? 'demo' : 'api');
   const [error, setError] = useState('');
 
+  const jobsRequest = useLatestRequest();
+  const fieldsRequest = useLatestRequest();
   useEffect(() => {
     if (DEMO_MODE) { setLoading(false); return; }
-    (async () => {
-      try {
-        const r = await listJobs({ limit: 30 });
-        if (!r.unavailable) {
-          const list = asList(r.data).map(normalizeJob).filter(Boolean);
-          setJobs(list);
-          if (list[0]) setJobId(list[0].id);
-        } else { setError('作业列表接口未启用'); }
-      } catch (e) { setError(e.message); } finally { setLoading(false); }
-    })();
-  }, []);
-
-  useEffect(() => {
+    jobsRequest.run((signal) => listJobs({ limit: 30 }, { signal }), {
+      onSuccess: (r) => {
+        if (r.unavailable) { setError(t('noJobList')); return; }
+        const list = asList(r.data).map(normalizeJob).filter(Boolean);
+        setJobs(list); if (list[0]) setJobId(list[0].id);
+      }, onError: (e) => setError(e.message), onFinally: () => setLoading(false),
+    });
+    return () => jobsRequest.cancel();
+  }, [jobsRequest]);
+  const loadFields = () => {
     if (!jobId || DEMO_MODE) return;
-    (async () => {
-      setLoading(true); setError('');
-      try {
-        const r = await getFieldQualityByJob(jobId);
-        if (r.unavailable) { setSource('api'); setFields([]); setError('字段质量接口未启用'); }
-        else {
-          setSource('api');
-          const list = extractFieldsFromResponse(r.data);
-          setFields(list.length ? list : []);
-        }
-      } catch (e) { setError(e.message); setSource('api'); setFields([]); }
-      finally { setLoading(false); }
-    })();
-  }, [jobId]);
+    return fieldsRequest.run((signal) => getFieldQualityByJob(jobId, { signal }), {
+      onStart: () => { setLoading(true); setError(''); setFields([]); },
+      onSuccess: (r) => {
+        setSource('api');
+        if (r.unavailable) { setFields([]); setError(t('apiReadyLater')); }
+        else setFields(extractFieldsFromResponse(r.data));
+      }, onError: (e) => { setError(e.message); setFields([]); }, onFinally: () => setLoading(false),
+    });
+  };
+  useEffect(() => {
+    loadFields(); return () => fieldsRequest.cancel();
+  }, [jobId, fieldsRequest]);
 
   return (
     <div>
@@ -71,7 +69,7 @@ export default function FieldQuality() {
               <option value="">{t('selectJob')}</option>
               {jobs.map((j) => <option key={j.id} value={j.id}>{j.sourceName}</option>)}
             </select>
-            <Button variant="secondary" size="sm" disabled={loading}>
+            <Button variant="secondary" size="sm" disabled={loading || !jobId} onClick={loadFields}>
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
               {loading ? t('loading') : t('synced')}
             </Button>

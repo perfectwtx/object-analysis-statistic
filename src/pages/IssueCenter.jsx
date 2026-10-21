@@ -1,3 +1,4 @@
+import { useLatestRequest } from '../hooks/useLatestRequest.js';
 import { DEMO_MODE } from '../lib/data-mode.js';
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -25,25 +26,25 @@ export default function IssueCenter() {
   const [sevFilter, setSevFilter] = useState('');
   const [error, setError] = useState('');
 
-  const load = async () => {
-    setLoading(true); setError('');
+  const request = useLatestRequest();
+  const load = () => {
     if (DEMO_MODE) { setLoading(false); return; }
-    try {
-      const jr = await listJobs({ limit: 40 });
-      if (!jr.unavailable) setJobs(asList(jr.data).map(normalizeJob).filter(Boolean));
-      const r = await listIssues({ jobId: jobFilter || undefined, limit: 200 });
-      if (r.unavailable) { setSource('api'); setIssues([]); setError('问题接口未启用'); }
-      else {
+    return request.run(async (signal) => {
+      const [jr, r] = await Promise.all([listJobs({ limit: 40 }, { signal }), listIssues({ jobId: jobFilter || undefined, limit: 200 }, { signal })]);
+      return { jr, r };
+    }, {
+      onStart: () => { setLoading(true); setError(''); setIssues([]); },
+      onSuccess: ({ jr, r }) => {
+        if (!jr.unavailable) setJobs(asList(jr.data).map(normalizeJob).filter(Boolean));
         setSource('api');
+        if (r.unavailable) { setIssues([]); setError(t('apiReadyLater')); return; }
         const pack = extractIssuesFromResponse(r.data);
-        const list = pack.issues.length ? pack.issues : asList(r.data).map(normalizeIssue).filter(Boolean);
-        setIssues(list);
+        setIssues(pack.issues.length ? pack.issues : asList(r.data).map(normalizeIssue).filter(Boolean));
         if (pack.jobs.length) setJobs(pack.jobs);
-      }
-    } catch (e) { setError(e.message); setSource('api'); setIssues([]); }
-    finally { setLoading(false); }
+      }, onError: (e) => { setError(e.message); setIssues([]); }, onFinally: () => setLoading(false),
+    });
   };
-  useEffect(() => { load(); }, [jobFilter]);
+  useEffect(() => { load(); return () => request.cancel(); }, [jobFilter, request]);
   const filtered = useMemo(
     () => (!sevFilter ? issues : issues.filter((i) => i.severity === sevFilter)),
     [issues, sevFilter],
