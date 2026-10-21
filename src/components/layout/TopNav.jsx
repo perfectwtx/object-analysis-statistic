@@ -1,3 +1,4 @@
+import { routeEnabled } from '../../lib/capabilities.js';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, HelpCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -11,7 +12,12 @@ import { startProductTour } from '../tour/ProductTour.jsx';
 
 export function TopNav() {
   const { pathname } = useLocation();
+  const capabilities = usePlatform((s) => s.capabilities);
   const section = activeSection(pathname);
+  const nav = PRIMARY_NAV.map((item) => {
+    const children = item.children?.filter((c) => routeEnabled(c.to, capabilities));
+    return { ...item, children, to: children?.[0]?.to || item.to };
+  }).filter((item) => item.children ? item.children.length : routeEnabled(item.to, capabilities));
   const locale = usePlatform((s) => s.locale);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -20,7 +26,7 @@ export function TopNav() {
 
   const hits = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const mapped = SEARCH_TARGETS.map((item) => ({
+    const mapped = SEARCH_TARGETS.filter((item) => routeEnabled(item.to, capabilities)).map((item) => ({
       ...item,
       label: t(locale, item.labelKey),
       hint: t(locale, item.hintKey),
@@ -34,7 +40,7 @@ export function TopNav() {
           item.to.includes(s),
       )
       .slice(0, 8);
-  }, [q, locale]);
+  }, [q, locale, capabilities]);
 
   useEffect(() => {
     const onDoc = (e) => {
@@ -161,7 +167,7 @@ export function TopNav() {
       {section?.children?.length ? (
         <div className="border-t border-border/70">
           <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-2 sm:px-6">
-            {section.children.map((c) => {
+            {section.children.filter((c) => routeEnabled(c.to, capabilities)).map((c) => {
               const on = c.exact
                 ? pathname === c.to
                 : pathname === c.to || pathname.startsWith(`${c.to}/`);

@@ -4,6 +4,11 @@ import { createServer } from 'vite';
 const server = await createServer({ configFile: false, server: { middlewareMode: true }, appType: 'custom' });
 after(() => server.close());
 const { loadPlatformOverview } = await server.ssrLoadModule('/src/lib/load-platform.js');
+const apiClient = await server.ssrLoadModule('/src/api/platform.js');
+const { routeEnabled } = await server.ssrLoadModule('/src/lib/capabilities.js');
+const originalFetch = globalThis.fetch;
+globalThis.localStorage = { getItem: () => null };
+after(() => { globalThis.fetch = originalFetch; });
 
 test('重试单个模块保留其他结果，趋势与快照只请求一次', async () => {
   const calls = {};
@@ -20,4 +25,23 @@ test('重试单个模块保留其他结果，趋势与快照只请求一次', as
   const next = await loadPlatformOverview({ api, demo: false, previous: first, only: ['alerts'] });
   assert.equal(calls.listJobs, 1); assert.equal(calls.listAlertRules, 2);
   assert.equal(next.jobs[0].id, 'real'); assert.equal(next.modules.alerts.source, 'api');
+});
+
+test('能力探测缓存成功与未实现响应，未知能力不隐藏，成功别名复用', async () => {
+  apiClient.clearApiDiscovery();
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(url);
+    const known = url.startsWith('/api/meta/capabilities');
+    return new Response(JSON.stringify(known ? { capabilities: { alerts: false, lineage: false } } : { error: 'missing' }), { status: known ? 200 : 404 });
+  };
+  const first = await apiClient.getCapabilities(); await apiClient.getCapabilities();
+  assert.equal(calls.length, 2); assert.equal(routeEnabled('/lineage', first.data), false);
+  assert.equal(routeEnabled('/analyze', first.data), true);
+  await apiClient.getCapabilities({ force: true });
+  assert.equal(calls.at(-1), '/api/meta/capabilities'); assert.equal(calls.length, 3);
+  apiClient.clearApiDiscovery(); calls.length = 0;
+  globalThis.fetch = async (url) => { calls.push(url); return new Response('{}', { status: 404 }); };
+  assert.deepEqual((await apiClient.getCapabilities()).data, {});
+  await apiClient.getCapabilities(); assert.equal(calls.length, 2);
 });

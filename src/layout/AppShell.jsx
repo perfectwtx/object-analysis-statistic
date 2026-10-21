@@ -4,6 +4,7 @@ import { TopNav } from '../components/layout/TopNav.jsx';
 import { hydrateTheme, hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
 import ProductTour from '../components/tour/ProductTour.jsx';
+import { routeEnabled } from '../lib/capabilities.js';
 
 export default function AppShell() {
   const { pathname } = useLocation();
@@ -15,6 +16,7 @@ export default function AppShell() {
   const source = usePlatform((s) => s.source);
   const error = usePlatform((s) => s.error);
   const locale = usePlatform((s) => s.locale);
+  const capabilities = usePlatform((s) => s.capabilities);
 
   useEffect(() => {
     hydrateTheme();
@@ -39,7 +41,11 @@ export default function AppShell() {
             ))}
           </div>
         ) : null}
-        <Outlet />
+        {routeEnabled(pathname, capabilities) ? <Outlet /> : (
+          <div role="status" className="p-8 text-center text-muted-foreground">
+            {locale === 'en' ? 'This feature is not enabled on the current server.' : '当前服务未启用此功能。'}
+          </div>
+        )}
       </main>
       <ProductTour />
     </div>

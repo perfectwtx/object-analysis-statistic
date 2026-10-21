@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { initialPlatformData } from './data-mode.js';
 import { loadPlatformOverview } from './load-platform.js';
-import { updateAlertRule } from '../api/platform.js';
+import { getBaseUrl } from '../api/client.js';
+import { getCapabilities, updateAlertRule } from '../api/platform.js';
 
 export const usePlatform = create((set, get) => ({
   ...initialPlatformData(),
@@ -12,6 +13,14 @@ export const usePlatform = create((set, get) => ({
   theme: 'dark',
   locale: 'zh',
 
+  capabilities: {}, capabilitiesError: null, backendBase: null,
+  loadCapabilities: async () => {
+    const base = getBaseUrl();
+    try {
+      const r = await getCapabilities();
+      if (base === getBaseUrl()) set({ capabilities: r.data, capabilitiesError: null });
+    } catch (e) { if (base === getBaseUrl()) set({ capabilities: {}, capabilitiesError: e.message }); }
+  },
   alertSaving: {},
   toggleAlert: async (id) => {
     const state = get();
@@ -87,12 +96,14 @@ export const usePlatform = create((set, get) => ({
   },
 
   ensureLoaded: () => {
-    if (get().lastLoadedAt && Date.now() - get().lastLoadedAt < 30000) return;
+    if (get().backendBase === getBaseUrl() && get().lastLoadedAt && Date.now() - get().lastLoadedAt < 30000) return;
     return get().refresh();
   },
   refresh: async ({ module } = {}) => {
     if (get().loading || Object.keys(get().alertSaving).length) return;
+    const base = getBaseUrl();
     set({ loading: true, error: null });
+    void get().loadCapabilities();
     try {
       const data = await loadPlatformOverview({ previous: get().overview, only: module ? [module] : undefined });
       set({

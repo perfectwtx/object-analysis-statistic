@@ -1,4 +1,10 @@
-import { request, tryRequest } from './client.js';
+import { request, tryRequest, getBaseUrl } from './client.js';
+import { normalizeCapabilities } from '../lib/capabilities.js';
+
+const routeCache = new Map();
+const capabilityCache = new Map();
+const CACHE_MS = 30_000;
+export function clearApiDiscovery() { routeCache.clear(); capabilityCache.clear(); }
 
 function qs(params = {}) {
   const sp = new URLSearchParams();
@@ -11,10 +17,20 @@ function qs(params = {}) {
 
 /** 依次尝试多个路径，第一个非 404 的结果返回 */
 async function tryPaths(paths, opts) {
+  const key = `${getBaseUrl()}|${opts?.method || 'GET'}|${paths.map((p) => p.split('?')[0]).join('|')}`;
+  const cachedRoute = routeCache.get(key);
+  if (opts?.cacheUnavailable && cachedRoute?.unavailable && Date.now() - cachedRoute.at < CACHE_MS) return cachedRoute.result;
+  const preferred = cachedRoute?.index;
+  const indices = paths.map((_, i) => i);
+  if (preferred != null) {
+    indices.splice(indices.indexOf(preferred), 1);
+    indices.unshift(preferred);
+  }
   let last = { data: null, unavailable: true };
-  for (const path of paths) {
+  for (const index of indices) {
+    const path = paths[index];
     const r = await tryRequest(path, opts);
-    if (!r.unavailable) return { ...r, path };
+    if (!r.unavailable) { routeCache.set(key, { index }); return { ...r, path }; }
     last = r;
   }
   return last;
@@ -29,7 +45,7 @@ export function listJobs(params = {}, opts) {
     `/analysis/jobs${q}`,
     `/jobs${q}`,
     `/analyze/jobs${q}`,
-  ], { timeout: 15_000, ...opts });
+  ], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 export function getJob(jobId, opts) {
@@ -108,7 +124,7 @@ export function getQualityDashboard(opts) {
   return tryPaths([
     '/quality/dashboard',
     '/quality-dashboard',
-  ], { timeout: 15_000, ...opts });
+  ], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 export function listQualitySnapshots(params = {}, opts) {
@@ -125,7 +141,7 @@ export function getQualityTrend(params = {}, opts) {
   return tryPaths([
     `/quality/trend${q}`,
     `/quality-trend${q}`,
-  ], { timeout: 15_000, ...opts });
+  ], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 /** 可查看字段质量的作业列表 */
@@ -193,7 +209,7 @@ export function listIssues(params = {}, opts) {
   return tryPaths([
     `/issues${q}`,
     `/quality/issues${q}`,
-  ], { timeout: 15_000, ...opts });
+  ], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 export function getJobIssues(jobId, opts) {
@@ -223,7 +239,7 @@ export function updateIssueStatus(jobId, fieldName, check, body, opts) {
 // ── Baselines ──
 
 export function listBaselines(opts) {
-  return tryPaths(['/quality-baselines', '/quality/baselines'], { timeout: 15_000, ...opts });
+  return tryPaths(['/quality-baselines', '/quality/baselines'], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 export function getBaseline(id, opts) {
@@ -249,20 +265,25 @@ export function createBaseline(body, opts) {
 }
 
 export function updateBaseline(id, body, opts) {
-  return request(`/quality-baselines/${encodeURIComponent(id)}`, {
+  return tryPaths([`/quality-baselines/${encodeURIComponent(id)}`, `/quality/baselines/${encodeURIComponent(id)}`], {
     method: 'PUT', body: JSON.stringify(body),
     headers: { 'Content-Type': 'application/json' }, timeout: 15_000, ...opts,
-  });
+  }).then(unwrapMutation);
 }
 
 export function deleteBaseline(id, opts) {
-  return request(`/quality-baselines/${encodeURIComponent(id)}`, { method: 'DELETE', timeout: 10_000, ...opts });
+  return tryPaths([`/quality-baselines/${encodeURIComponent(id)}`, `/quality/baselines/${encodeURIComponent(id)}`], { method: 'DELETE', timeout: 10_000, ...opts }).then(unwrapMutation);
+}
+
+function unwrapMutation(result) {
+  if (result.unavailable) throw new Error(result.error || '接口未启用');
+  return result.data;
 }
 
 // ── Alerts / Webhooks ──
 
 export function listAlertRules(opts) {
-  return tryPaths(['/alert-rules', '/alerts/rules', '/quality/alert-rules'], { timeout: 15_000, ...opts });
+  return tryPaths(['/alert-rules', '/alerts/rules', '/quality/alert-rules'], { timeout: 15_000, cacheUnavailable: true, ...opts });
 }
 
 export function createAlertRule(body, opts) {
@@ -309,8 +330,14 @@ export function getImpactAnalysis(jobId, opts) {
   ], { timeout: 30_000, ...opts });
 }
 
-export function getCapabilities(opts) {
-  return tryPaths(['/capabilities', '/meta/capabilities'], { timeout: 5_000, ...opts });
+export async function getCapabilities({ force = false, ...opts } = {}) {
+  const base = getBaseUrl();
+  const cached = capabilityCache.get(base);
+  if (!force && cached && Date.now() - cached.at < CACHE_MS) return cached.promise;
+  const promise = tryPaths(['/capabilities', '/meta/capabilities'], { timeout: 5_000, ...opts })
+    .then((r) => ({ ...r, data: r.unavailable ? {} : normalizeCapabilities(r.data) }));
+  capabilityCache.set(base, { at: Date.now(), promise });
+  try { return await promise; } catch (e) { capabilityCache.delete(base); throw e; }
 }
 
 /** 工作台完成分析后写入，供血缘/影响等页默认带上 */

@@ -3,7 +3,7 @@ const BASE_KEY = 'apiBaseOverride';
 const DEFAULT_TIMEOUT = 120_000;
 
 export function getBaseUrl() {
-  return localStorage.getItem(BASE_KEY) || API_BASE;
+  try { return localStorage.getItem(BASE_KEY) || API_BASE; } catch { return API_BASE; }
 }
 
 export function setBaseUrl(url) {
