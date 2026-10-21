@@ -6,6 +6,7 @@ const API_TARGET = process.env.API_TARGET || 'http://localhost:5200';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: { manifest: true },
   server: {
     port: 5173,
     open: false,

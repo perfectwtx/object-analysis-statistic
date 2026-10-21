@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
+import LoadingBlock from '../components/ui/LoadingBlock.jsx';
 import { TopNav } from '../components/layout/TopNav.jsx';
 import { hydrateTheme, hydrateLocale, usePlatform } from '../lib/store.js';
 import { cn } from '../lib/cn.js';
@@ -41,7 +42,7 @@ export default function AppShell() {
             ))}
           </div>
         ) : null}
-        {routeEnabled(pathname, capabilities) ? <Outlet /> : (
+        {routeEnabled(pathname, capabilities) ? <Suspense fallback={<LoadingBlock label={locale === 'en' ? 'Loading…' : '加载中…'} />}><Outlet /></Suspense> : (
           <div role="status" className="p-8 text-center text-muted-foreground">
             {locale === 'en' ? 'This feature is not enabled on the current server.' : '当前服务未启用此功能。'}
           </div>
